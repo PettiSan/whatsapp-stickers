@@ -1,0 +1,6 @@
+# Instalar via setup.sh (Linux/WSL) ou setup.cmd (Windows): eles instalam o torch CPU antes,
+# senao o pip do Linux puxa o torch com CUDA (~3 GB) como dependencia do ultralytics.
+rembg[cpu]>=2.0.84
+pillow>=12
+ultralytics>=8.4
+rapidocr>=3.9

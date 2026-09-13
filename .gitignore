@@ -1,0 +1,13 @@
+# ambiente
+.venv/
+__pycache__/
+*.pyc
+
+# gerado pelo script: reproduzivel a partir das imagens brutas + pack.json
+**/out/
+
+# editor / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,5 @@
+{
+  "name": "<Nome do time ou jogador, ex.: Dallas Cowboys>",
+  "keywords": ["<keyword 1>", "<keyword 2>", "<ate 19, o #NFL ja vem do defaults.json>"],
+  "color": "#RRGGBB"
+}

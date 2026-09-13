@@ -1,0 +1,11 @@
+# LF no repo e no checkout, nos dois sistemas (o repo vive no WSL, o Claude Desktop edita do Windows)
+* text=auto eol=lf
+
+# batch do Windows quer CRLF
+*.cmd text eol=crlf
+
+# imagens sao binarias
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary

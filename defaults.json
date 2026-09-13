@@ -1,0 +1,9 @@
+{
+  "site": "https://getstickerpack.com/dashboard",
+  "name_template": "GarrettMVP - {name} 2026",
+  "description": "Pacote criado pelo grupo GarrettMVP",
+  "keywords_always": ["#NFL"],
+  "cover_image": "logo",
+  "pack_icon": "logo",
+  "stickers_dir": "out/stickers"
+}

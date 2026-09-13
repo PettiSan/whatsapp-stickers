@@ -4,18 +4,21 @@ make_stickers.py: converte as imagens de uma pasta de pacote em figurinhas pront
 pra subir no getstickerpack.com (PNG 512x512, fundo transparente).
 
 Uso:
-    stickers.cmd <pasta-do-pacote> [opcoes]          (wrapper que usa o venv certo)
-    python make_stickers.py <pasta-do-pacote> [opcoes]
+    ./stickers.sh <pacote> [opcoes]                  (wrapper que usa o venv certo; stickers.cmd no Windows)
+    python make_stickers.py <pacote> [opcoes]
 
-Entrada:  <pasta>/*.jpg | *.jpeg | *.png | *.webp   (so a raiz da pasta; subpastas sao ignoradas)
-          <pasta>/logo.*                            convencao: vira o icone do pacote (tray) e a capa no site
-Saida:    <pasta>/out/stickers/NN-<nome>.png        512x512 RGBA: selecionar tudo aqui no Batch upload
-          <pasta>/out/tray.png                      96x96, icone do pacote
-          <pasta>/out/preview.png                   folha de contato original | resultado, pra conferir
-          <pasta>/out/log.txt                       o que foi feito em cada imagem (mesmo texto do terminal)
-          <pasta>/out/report.json                   tudo que o upload precisa: dados do site (defaults.json +
+<pacote> e o nome da pasta do pacote dentro de packs/ (dallas-cowboys -> packs/dallas-cowboys), que e
+onde todo pacote mora. Um caminho de pasta que exista tambem e aceito, pra rodar ad hoc fora do repo.
+
+Entrada:  packs/<pacote>/*.jpg | *.jpeg | *.png | *.webp   (so a raiz da pasta; subpastas sao ignoradas)
+          packs/<pacote>/logo.*                     convencao: vira o icone do pacote (tray) e a capa no site
+Saida:    packs/<pacote>/out/stickers/NN-<nome>.png 512x512 RGBA: selecionar tudo aqui no Batch upload
+          packs/<pacote>/out/tray.png               96x96, icone do pacote
+          packs/<pacote>/out/preview.png            folha de contato original | resultado, pra conferir
+          packs/<pacote>/out/log.txt                o que foi feito em cada imagem (mesmo texto do terminal)
+          packs/<pacote>/out/report.json            tudo que o upload precisa: dados do site (defaults.json +
                                                     pack.json), caminho de cada figurinha, capa, icone, avisos
-          <pasta>/out/webp/NN-<nome>.webp           so com --webp: formato nativo do WhatsApp, <= 100 KB
+          packs/<pacote>/out/webp/NN-<nome>.webp    so com --webp: formato nativo do WhatsApp, <= 100 KB
 
 Codigo de saida: 0 = tudo certo; 3 = gerou tudo, mas ha AVISOS no fim do log (foto pra trocar,
 pack.json incompleto, logo faltando...); 2 = nao rodou (pasta/imagens nao encontradas).
@@ -65,6 +68,7 @@ DEFAULT_MODEL = "birefnet-general-lite"
 MODELS_DIR = Path.home() / ".rembg"  # o rembg ja guarda os dele aqui; o YOLO vai junto
 YOLO_WEIGHTS = "yolo11m-seg.pt"       # ~43 MB, baixa do github.com/ultralytics/assets no primeiro uso
 SCRIPT_DIR = Path(__file__).resolve().parent  # onde mora o defaults.json
+PACKS_DIR = SCRIPT_DIR / "packs"              # onde mora todo pacote (raiz do repo e so codigo e config)
 MIN_SOURCE_PX = 300                   # lado maior abaixo disso: a figurinha de 512 sai borrada
 LANCZOS = Image.Resampling.LANCZOS
 
@@ -308,6 +312,17 @@ def kb(n: int) -> str:
     return f"{n / 1024:.0f} KB"
 
 
+def resolve_pack(arg: str) -> Path | None:
+    """Padrao: <pacote> e o nome da pasta em packs/. Caminho de pasta que exista tambem serve (ad hoc)."""
+    by_name = PACKS_DIR / arg
+    if by_name.is_dir():
+        return by_name
+    as_path = Path(arg)
+    if as_path.is_dir():
+        return as_path
+    return None
+
+
 def load_metadata(pack: Path, warn) -> dict:
     """Junta defaults.json (ao lado do script) com pack.json (pasta do pacote) no que o site pede."""
     defaults_path = SCRIPT_DIR / "defaults.json"
@@ -378,8 +393,9 @@ def process_photo(img: Image.Image, models: Models, people: list[np.ndarray],
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("pack", type=Path, help="pasta do pacote (as imagens ficam na raiz dela)")
-    ap.add_argument("--out", type=Path, default=None, help="pasta de saida (default: <pasta>/out)")
+    ap.add_argument("pack", help="nome do pacote, pasta em packs/ (as imagens ficam na raiz dela); "
+                                 "caminho de pasta existente tambem serve")
+    ap.add_argument("--out", type=Path, default=None, help="pasta de saida (default: packs/<pacote>/out)")
     ap.add_argument("--model", default=DEFAULT_MODEL,
                     help=f"modelo do rembg (default: {DEFAULT_MODEL}; alternativas: isnet-general-use (rapido), birefnet-general (pesado))")
     ap.add_argument("--margin", type=int, default=16,
@@ -395,9 +411,9 @@ def main() -> int:
                     help="trecho do nome do arquivo que vira o icone do pacote (default: 'logo'; senao, o primeiro)")
     args = ap.parse_args()
 
-    pack: Path = args.pack
-    if not pack.is_dir():
-        print(f"pasta nao encontrada: {pack}", file=sys.stderr)
+    pack = resolve_pack(args.pack)
+    if pack is None:
+        print(f"pacote nao encontrado: nem {PACKS_DIR / args.pack} nem a pasta {args.pack}", file=sys.stderr)
         return 2
 
     sources = sorted(p for p in pack.iterdir() if p.is_file() and p.suffix.lower() in EXTS)
@@ -437,7 +453,10 @@ def main() -> int:
     first_sticker = tray_source = None
     pairs = []
     stickers: list[dict] = []
-    log(f"{len(sources)} imagens em {pack}  ->  {out}\n")
+    log(f"{len(sources)} imagens em {pack}  ->  {out}")
+    if PACKS_DIR not in pack.resolve().parents:
+        log(f"(pasta fora de packs/: ok pra teste ad hoc, mas pacote do repo mora em {PACKS_DIR / pack.name})")
+    log()
 
     for i, src in enumerate(sources, start=1):
         try:

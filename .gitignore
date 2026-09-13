@@ -6,6 +6,9 @@ __pycache__/
 # gerado pelo script: reproduzivel a partir das imagens brutas + pack.json
 **/out/
 
+# handoffs de sessao (regra da governanca smartcob-ai: pasta na raiz, nunca versionada)
+.handoffs/
+
 # editor / SO
 .vscode/
 .idea/

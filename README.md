@@ -18,9 +18,10 @@ Uns minutos e ~1 GB de pacotes. Os modelos (~250 MB) baixam sozinhos no primeiro
 
 ## Amanhã: criar um pacote novo, do zero
 
-1. **Imagens.** Criar `<nome-do-pacote>/` na raiz do repo (ex.: `dallas-cowboys/`) e jogar as
-   imagens brutas na raiz dela. Aceita `jpg`, `jpeg`, `png`, `webp`, em qualquer tamanho (abaixo de
-   300 px o script avisa que vai ficar borrada). Não precisa tirar fundo, redimensionar nem renomear.
+1. **Imagens.** Criar `packs/<nome-do-pacote>/` (ex.: `packs/dallas-cowboys/`; todo pacote mora
+   dentro de `packs/`, nunca na raiz do repo) e jogar as imagens brutas na raiz dela. Aceita `jpg`,
+   `jpeg`, `png`, `webp`, em qualquer tamanho (abaixo de 300 px o script avisa que vai ficar
+   borrada). Não precisa tirar fundo, redimensionar nem renomear.
    Uma delas tem que se chamar `logo.png` (ou `logo.jpg`...): é o ícone e a capa do pacote.
    Entre 3 e 30 imagens.
 2. **Dados do site.** Copiar `pack.template.json` da raiz pra dentro da pasta como `pack.json` e
@@ -33,27 +34,31 @@ Uns minutos e ~1 GB de pacotes. Os modelos (~250 MB) baixam sozinhos no primeiro
    O nome final vira `GarrettMVP - Dallas Cowboys 2026`, a descrição e o `#NFL` vêm de
    `defaults.json`. Se pular este passo, o Claude pergunta os três valores antes de rodar; se
    sobrar placeholder do template, o script avisa.
-3. **Abrir o Claude Code Desktop na pasta do repo** (`\\wsl.localhost\Ubuntu-24.04\home\pettisan\projects\whatsapp-stickers`,
-   fica nas pastas recentes) e dizer `processa dallas-cowboys`. Ele roda o script, manda o
-   `preview.png` e lista os avisos (foto pra trocar, dado faltando). Você aprova ou troca fotos e
-   pede de novo.
-4. **Upload.** Com o preview aprovado, dizer `sobe o dallas-cowboys`. O Claude usa o Chrome real
-   (extensão Claude in Chrome, com você já logado no site), preenche o form com o `report.json`,
-   sobe os PNGs pelo Batch upload e **para antes do Publish**, mostrando o print. Você confere e diz
-   `publica`. Enquanto a receita do form não estiver mapeada (ver `CLAUDE.md`), este passo é manual:
-   Batch upload com tudo que está em `out/stickers/`, ícone e capa com o logo, dados do
-   `out/report.json`.
+3. **Abrir o Claude Code Desktop numa pasta do Windows** (ex.: `C:\Users\filip\OneDrive\Documentos\Stickers`,
+   fica nas pastas recentes), **não** na pasta do repo: pasta `\\wsl.localhost\...` o Desktop roda
+   dentro do WSL, e essa sessão não enxerga a extensão do Chrome que o passo 4 precisa (detalhe no
+   `CLAUDE.md`). Como o cwd não é o repo, a primeira mensagem aponta o procedimento:
+   `leia \\wsl.localhost\Ubuntu-24.04\home\pettisan\projects\whatsapp-stickers\CLAUDE.md e processa dallas-cowboys`.
+   Ele roda o script (dentro do WSL), manda o `preview.png` e lista os avisos (foto pra trocar, dado
+   faltando). Você aprova ou troca fotos e pede de novo.
+4. **Upload.** Na mesma sessão, com o preview aprovado, dizer `sobe o dallas-cowboys`. O Claude usa
+   o Chrome real (extensão Claude in Chrome, painel aberto e logado na mesma conta do app), preenche
+   o form com o `report.json`, sobe os PNGs pelo Batch upload e **para antes do Publish**, mostrando
+   o print. Você confere e diz `publica`. Enquanto a receita do form não estiver mapeada (ver
+   `CLAUDE.md`), este passo é manual: Batch upload com tudo que está em `out/stickers/`, ícone e
+   capa com o logo, dados do `out/report.json`.
 5. **Link e commit.** O site revisa antes de liberar a URL. Quando ela aparecer no dashboard, dizer
    `registra o link do dallas-cowboys`: o Claude coloca no `Stickers.md` e commita a pasta do pacote
    (imagens brutas + `pack.json`) junto com o índice. `Stickers.md` é a fonte única dos links (o doc
    do Google Drive foi abolido em 2026-09-13): o pacote só está pronto com esse commit pushado.
 
 Sem o Claude: os passos 1 e 2 iguais, depois `./stickers.sh dallas-cowboys` (WSL) ou
-`stickers.cmd dallas-cowboys` (Windows) e olhar `out/preview.png` e `out/log.txt`.
+`stickers.cmd dallas-cowboys` (Windows) e olhar `out/preview.png` e `out/log.txt`. O argumento é o
+nome da pasta em `packs/`; o script resolve o `packs/` sozinho.
 
 ## O que o script gera
 
-`./stickers.sh dallas-cowboys` escreve em `dallas-cowboys/out/` (gitignored):
+`./stickers.sh dallas-cowboys` escreve em `packs/dallas-cowboys/out/` (gitignored):
 
 | Arquivo | O que é |
 |---|---|
@@ -99,7 +104,7 @@ A linha de log de cada imagem diz o que foi feito (`texto cortado: base 25%`, `p
 | `--force-bg` | trata PNG transparente como foto comum (passa por todos os passos) |
 | `--tray josh` | escolhe qual imagem vira o ícone (trecho do nome; default `logo`, senão a primeira) |
 | `--webp` | também gera `out/webp/` |
-| `--out pasta` | saída em outro lugar (default `<pacote>/out`) |
+| `--out pasta` | saída em outro lugar (default `packs/<pacote>/out`) |
 
 Medido em 2026-09-13 nas 8 imagens de teste (CPU, Windows): `isnet-general-use` ~1,3 s/imagem,
 `birefnet-general-lite` ~7 s/imagem, `birefnet-general` ~13 s/imagem. YOLO e OCR somam ~0,5 s por

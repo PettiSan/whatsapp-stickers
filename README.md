@@ -14,7 +14,8 @@ Clone em `~/projects/whatsapp-stickers` no WSL (Ubuntu 24.04). Roda em Linux e e
 setup.cmd         # Windows: idem, com o py launcher
 ```
 
-Uns minutos e ~1 GB de pacotes. Os modelos (~250 MB) baixam sozinhos no primeiro uso pra `~/.rembg/`.
+Uns minutos e ~2 GB de pacotes (o torch CPU sozinho é ~1 GB). Os modelos (~250 MB) baixam sozinhos
+no primeiro uso pra `~/.rembg/`. Tudo isso é local e gitignored: o repo em si tem ~400 KB.
 
 ## Amanhã: criar um pacote novo, do zero
 

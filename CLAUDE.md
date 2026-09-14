@@ -22,9 +22,10 @@ whatsapp-stickers/
   packs/                        todos os pacotes moram aqui (desde 2026-09-13); pasta de pacote na
                                 raiz do repo não existe mais
     <pacote>/                   uma pasta por pacote, ex.: packs/dallas-cowboys/
-      *.jpg|*.jpeg|*.png|*.webp imagens brutas, qualquer tamanho, na raiz da pasta
+      *.jpg|*.jpeg|*.png         imagens brutas, qualquer tamanho, na raiz da pasta
+      *.webp|*.avif              (avif desde 2026-09-14: é o formato que o Google Imagens serve hoje)
       logo.*                    convenção: o logo do pacote (ícone + capa no site + figurinha)
-      pack.json                 { "name", "keywords", "color" }: o que muda por pacote
+      pack.json                 { "name", "keywords", "color", "photos" }: o que muda por pacote
       out/                      gerado (gitignored): stickers/, tray.png, preview.png, log.txt, report.json
 ```
 
@@ -48,25 +49,41 @@ usa o `py` launcher, Python 3.14). Modelos baixam sozinhos no primeiro uso pra
 fim. Código de saída: `0` limpo, `3` gerou tudo mas há AVISOS, `2` não rodou. Exit 3 **não é
 falha**: é a lista de coisas que o usuário precisa decidir.
 
-Se a sessão abriu num **worktree** (cwd em `.claude\worktrees\<id>`, branch `claude/...`): o
-`.venv/` não está lá (gitignored) e pasta de pacote nova criada no clone também não (não
-commitada). Dizer isso na primeira resposta e pedir pra reabrir a sessão direto no clone, sem
-worktree; não copiar pasta de pacote pra dentro do worktree. Se mesmo assim precisar rodar o script
-ali (pacote já commitado), ligar o venv por junction em vez de rodar outro `setup.cmd`:
-`New-Item -ItemType Junction -Path <worktree>\.venv -Target C:\Projetos\whatsapp-stickers\.venv`
-(PowerShell; a junction é gitignored como o `.venv/`).
+Se a sessão abriu num **worktree** (cwd em `.claude\worktrees\<id>`, branch `claude/...`), duas
+coisas não estão lá: o `.venv/` (gitignored) e qualquer pasta de pacote ainda não commitada.
+
+- **Trazer a pasta do pacote pra dentro do worktree e commitar.** É onde ela vai morar de qualquer
+  jeito: bruto de pacote é versionado (`packs/<pacote>/` com imagens + `pack.json`). Não é questão
+  de peso, medido em 2026-09-14: um pacote inteiro dá ~3 MB, e 30 pacotes de 30 fotos dariam ~110 MB,
+  contra a recomendação de 1 GB do GitHub. ⚠️ **Correção de 2026-09-14:** esta regra dizia o
+  contrário ("não copiar pasta de pacote pra dentro do worktree", "reabrir a sessão no clone"). Ela
+  não sobrevive ao harness, que **bloqueia toda escrita no clone base** a partir de uma sessão de
+  worktree, `--out` incluído. Então não existe o caminho de rodar daqui escrevendo lá.
+- **Interpretador: usar o Python do clone direto**, `C:\Projetos\whatsapp-stickers\.venv\Scripts\python.exe
+  make_stickers.py <pacote>`, rodando de dentro do worktree. Ler do clone é permitido, é só escrita que
+  não é. Não rodar outro `setup.cmd` (~2 GB à toa) e não precisa mais de junction.
+- **`out/` nasce no worktree e morre com ele.** Isso é aceitável porque é gerado e gitignored: depois
+  do merge, rodar de novo no clone reconstrói o backup local. O que **não** pode se perder é o bruto,
+  e ele está commitado.
 
 ## Procedimento: "novo pacote" / "processa <pasta>" / "roda o <pacote>"
 
-1. Ler `packs/<pacote>/pack.json`. Se não existir, copiar `pack.template.json` pra lá e **perguntar**
-   `name`, `keywords` e `color` antes de rodar (não inventar; a cor é a cor oficial do time ou a
-   que o usuário disser). O script avisa se sobrou placeholder do template. Pasta de pacote que
-   apareceu na raiz do repo (criada à mão no lugar errado): mover pra `packs/` antes de rodar, com
-   `git mv` se já estiver versionada.
+1. Ler `packs/<pacote>/pack.json`. Se não existir, **propor** `name`, `color` e `keywords` já
+   preenchidos a partir do time, neste formato, e esperar a resposta antes de rodar (regra de
+   2026-09-13; antes era perguntar em aberto, o que jogava de volta pro usuário o que dá pra inferir
+   do próprio pacote):
 
-   ```json
-   { "name": "Dallas Cowboys", "keywords": ["cowboys", "dak prescott"], "color": "#041E42" }
    ```
+   Sugestoes pack.json:
+   name: "Seattle Seahawks"
+   color: "#002244"
+   keywords: seahawks, seattle, sam darnold, mike macdonald
+   ```
+
+   A cor é a oficial do time, ou a que o usuário disser. As keywords saem do time mais os jogadores
+   que aparecem nas fotos da pasta. O `#NFL` fixo vem do `defaults.json`, não repetir na sugestão.
+   Pasta de pacote que apareceu na raiz do repo (criada à mão no lugar errado): mover pra `packs/`
+   antes de rodar, com `git mv` se já estiver versionada.
 
 2. Conferir que existe `logo.*` na pasta. Se não, avisar antes de rodar (o site pede ícone e capa).
 3. Rodar o comando. Não passar flag nenhuma por conta própria: os defaults são as decisões do
@@ -76,9 +93,58 @@ ali (pacote já commitado), ligar o venv por junction em vez de rodar outro `set
 5. Reportar **neste formato**, nada além:
    - `AVISOS` do log, um por linha, cada um com a ação sugerida (trocar a foto X, completar
      `pack.json`, adicionar `logo.*`...). Se `sem avisos`, dizer só isso.
-   - Linhas do log com `texto cortado` e `pessoas: N -> M`, pra ele saber o que foi mexido.
+   - Linhas do log com `texto cortado`, `pessoas: N -> M`, `objeto junto`, `bola:` e
+     `crop do pack.json`, pra ele saber o que foi mexido.
 6. Parar e esperar. O usuário olha o preview e aprova, troca fotos ou pede rodar de novo. Só depois
    de aprovado vem o upload.
+
+## Onde cada regra mora (decidido em 2026-09-14)
+
+Três naturezas, três lugares. Errar o lugar é o que faz regra apodrecer.
+
+| Natureza | Mora em | Exemplo |
+|---|---|---|
+| Percepção genérica | nos modelos, já prontos | pessoa e bola (YOLO), texto (RapidOCR), primeiro plano (birefnet) |
+| Política que vale pra toda foto | `make_stickers.py` | manter o que o sujeito segura, descartar figurante, cortar legenda |
+| Gosto, por foto | `pack.json`, bloco `photos` | "só o rosto do Macdonald no `mike-3`" |
+| Prompt salvo | `.claude/commands/processa.md` | o boilerplate de `/processa <pacote>` |
+
+**Não** treinar modelo pra objeto na mão. Avaliado em 2026-09-14: bola e troféu segurados não
+precisam de detector nenhum, porque estão grudados no sujeito e a regra de conectividade cobre os
+dois. Treinar custaria caro pelo lado errado: o gargalo não é GPU (tem uma RTX 5060 Ti aqui), é
+**rotulagem**, porque o pipeline consome máscara de segmentação e não caixa, então seria desenhar
+polígono à mão em centenas de fotos.
+
+A exceção medida é **bola solta no ar**, que não encosta em ninguém: ali o COCO não serve (0.113 de
+confiança, empatado com o ruído, detalhe no `BALL_MIN_CONF` do script) e a bola se perde. Se isso
+virar recorrente em vários pacotes, aí sim treinar é a saída honesta. Com uma ou duas fotos por
+pacote, não é.
+
+**Não** escrever pedido por foto em prosa, nem no chat nem num `.md`. Prosa exige um humano
+relendo e reaplicando a cada rodada, e é exatamente isso que se perde. Vai pro `photos` do
+`pack.json`, onde todo retângulo é `[x1, y1, x2, y2]` em fração de 0 a 1 da imagem original:
+
+```json
+"photos": {
+  "mike-3": { "crop": [0.42, 0.23, 0.74, 0.50] },
+  "kupp-2": { "keep": [[0.30, 0.08, 0.45, 0.19]] },
+  "mike-2": { "drop": [[0.0, 0.58, 0.33, 1.0]] }
+}
+```
+
+- `crop`: recorta antes de tudo e pula a busca por legenda, porque o enquadramento já é escolha
+  humana. É o "expressão facial": fechar **no rosto e mais nada**, referência é a figurinha do Dak.
+- `keep`: roda o rembg de novo só dentro do retângulo e força o resultado. Num retângulo apertado o
+  objeto é que é o saliente, então o modelo que errou na foto inteira acerta ali. É a saída pra bola
+  solta no ar.
+- `drop`: apaga o retângulo no fim. Serve pra sujeira de gente que o YOLO **não** detectou, caso em
+  que não existe máscara pra subtrair (aconteceu no `mike-2`, jaqueta de um terceiro sem cabeça no
+  enquadramento).
+
+Pra achar o retângulo, recortar num arquivo de teste no scratchpad e **olhar** antes de gravar, nunca
+chutar coordenada. Grade de coordenadas sobre a foto ampliada ajuda a ler a fração direto. Se um dia recorte de rosto virar rotina em todo pacote, dá pra automatizar sem treino
+com o modelo de **pose** do YOLO (nariz, olhos e orelhas ancoram o rosto e dizem de qual pessoa),
+mas só depois de 3 ou 4 pacotes mostrarem que vale.
 
 ## Procedimento: upload no getstickerpack.com
 

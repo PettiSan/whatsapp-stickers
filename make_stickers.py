@@ -10,7 +10,7 @@ Uso:
 <pacote> e o nome da pasta do pacote dentro de packs/ (dallas-cowboys -> packs/dallas-cowboys), que e
 onde todo pacote mora. Um caminho de pasta que exista tambem e aceito, pra rodar ad hoc fora do repo.
 
-Entrada:  packs/<pacote>/*.jpg | *.jpeg | *.png | *.webp   (so a raiz da pasta; subpastas sao ignoradas)
+Entrada:  packs/<pacote>/*.jpg | *.jpeg | *.png | *.webp | *.avif  (so a raiz; subpastas sao ignoradas)
           packs/<pacote>/logo.*                     convencao: vira o icone do pacote (tray) e a capa no site
 Saida:    packs/<pacote>/out/stickers/NN-<nome>.png 512x512 RGBA: selecionar tudo aqui no Batch upload
           packs/<pacote>/out/tray.png               96x96, icone do pacote
@@ -24,10 +24,16 @@ Codigo de saida: 0 = tudo certo; 3 = gerou tudo, mas ha AVISOS no fim do log (fo
 pack.json incompleto, logo faltando...); 2 = nao rodou (pasta/imagens nao encontradas).
 
 O que acontece com cada foto (PNG que ja e transparente pula tudo isso e so e enquadrado):
+  0. se o pack.json tem "photos": {"<arquivo>": {"crop": [x1, y1, x2, y2]}}, a foto e cortada nesse
+     retangulo (fracao de 0 a 1) antes de tudo, e a busca por legenda e pulada: o recorte e escolha
+     humana, tipo "so o rosto". E a unica coisa que se declara por foto.
   1. legenda/overlay de texto no topo ou na base e cortada fora da foto (RapidOCR acha o texto)
   2. fundo removido (rembg, birefnet)
   3. se a foto tem mais de uma pessoa, so a(s) principal(is) fica(m) (YOLO segmenta cada pessoa;
-     quem tem menos da metade da area da maior e descartado)
+     quem tem menos da metade da area da maior e descartado). O que a pessoa principal segura vai
+     junto: o corte tira os pixels de quem foi descartado, nao tudo que estiver fora da silhueta,
+     entao bola, trofeu e capacete na mao sobrevivem. Bola solta no ar entra pela classe
+     "sports ball" do COCO, que o mesmo YOLO ja detecta.
   4. recorte, enquadramento em 512x512 com margem
 
 Regras que o script garante (spec oficial: github.com/WhatsApp/stickers, Android/README.md):
@@ -60,7 +66,7 @@ STICKER = 512
 TRAY = 96
 WEBP_MAX = 100 * 1024
 TRAY_MAX = 50 * 1024
-EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+EXTS = {".jpg", ".jpeg", ".png", ".webp", ".avif"}  # avif: nativo no Pillow >= 11.3, sem plugin
 # medido em 2026-09-13 nas imagens de teste (CPU): isnet-general-use ~1.3 s/img mas deixa gente
 # de fundo e overlay; birefnet-general-lite ~7 s/img e limpa a multidao; birefnet-general ~13 s/img,
 # ganho marginal sobre o lite
@@ -86,7 +92,21 @@ TEXT_NOT_CROPPED = {"texto no meio, nao cortado", "texto sobre a pessoa, nao cor
 # --- pessoas: quem fica quando ha mais de uma
 PERSON_MIN_AREA = 0.05  # pessoa principal menor que 5% da foto: o sujeito nao e gente, nao mexe
 PERSON_KEEP_RATIO = 0.5  # fica quem tem >= 50% da area da maior
-PERSON_DILATE = 0.03    # folga em volta da mascara do YOLO, fracao do maior lado
+PERSON_DILATE = 0.03    # folga em volta da mascara de quem sai, fracao do maior lado
+
+# --- objetos: o que a pessoa principal segura nao pode ser comido junto com o figurante
+BALL_CLASS = 32         # "sports ball" no COCO, ja treinado no yolo11m-seg: nao precisa treinar nada
+# 0.5 e alto de proposito, e nao adianta baixar. Medido no pacote seattle-seahawks em 2026-09-14: o
+# COCO foi treinado em bola redonda e le mal a oval. Bola de verdade na mao sai com 0.73 e 0.96, mas
+# bola solta no ar sai com 0.113 (kupp-2), no meio do ruido: o logo da Pepsi no painel de fundo do
+# sam-7 da 0.107 e um ombro do mayers-1 da 0.113 enquanto a bola real dele nao e detectada. Sinal e
+# ruido se cruzam, entao limiar nenhum separa os dois, e bola falsa pintada e pior que bola perdida.
+# Bola na mao nao depende disto: quem garante ela e a regra de conectividade do keep_main_people.
+BALL_MIN_CONF = 0.5
+OBJECT_NOTE_MIN = 0.01  # so anota "objeto junto" se ele passar de 1% da area do sujeito
+# "keep" que volta enchendo mais que isto da caixa quer dizer que o rembg nao achou borda nenhuma ali
+# e devolveu o retangulo inteiro. Medido: bola nitida do kupp-2 da 0.41, bola borrada do mayers-1 da 0.75.
+KEEP_FALLBACK = 0.65
 
 
 def slugify(text: str) -> str:
@@ -143,13 +163,15 @@ class Models:
 # pessoas (YOLO) rodam num processo separado: medido em 2026-09-13, depois de uma inferencia do
 # torch no mesmo processo o rembg (onnxruntime) cai de ~6 s pra ~12 s por imagem, e nao volta.
 
-def people_prepass(sources: list[Path]) -> dict[int, list[np.ndarray]]:
-    """Mascaras booleanas (H x W) de cada pessoa por imagem (indice em `sources`), da maior pra menor."""
+def people_prepass(sources: list[Path]) -> tuple[dict[int, list[np.ndarray]], dict[int, list[np.ndarray]]]:
+    """Por imagem (indice em `sources`): mascaras das pessoas, da maior pra menor, e das bolas."""
     with tempfile.TemporaryDirectory() as tmp:
         cache = Path(tmp) / "people.npz"
         subprocess.run([sys.executable, __file__, "--_people-worker", str(cache), *map(str, sources)], check=True)
         with np.load(cache) as z:
-            return {int(k): list(z[k]) for k in z.files}
+            people = {int(k): list(z[k]) for k in z.files if not k.endswith("b")}
+            balls = {int(k[:-1]): list(z[k]) for k in z.files if k.endswith("b")}
+            return people, balls
 
 
 def people_worker(cache: str, files: list[str]) -> int:
@@ -162,13 +184,22 @@ def people_worker(cache: str, files: list[str]) -> int:
     for i, f in enumerate(files):
         try:
             rgb = ImageOps.exif_transpose(Image.open(f)).convert("RGB")
-            result = yolo.predict(rgb, classes=[0], conf=0.3, verbose=False, retina_masks=True)[0]
+            result = yolo.predict(rgb, classes=[0, BALL_CLASS], conf=0.3, verbose=False, retina_masks=True)[0]
         except Exception:  # imagem ilegivel: o processo principal reporta, aqui so segue
-            found[str(i)] = np.zeros((0, 1, 1), bool)
+            found[str(i)] = found[f"{i}b"] = np.zeros((0, 1, 1), bool)
             continue
-        masks = [] if result.masks is None else [m.cpu().numpy() > 0.5 for m in result.masks.data]
-        masks.sort(key=lambda m: int(m.sum()), reverse=True)
-        found[str(i)] = np.array(masks, dtype=bool) if masks else np.zeros((0, rgb.height, rgb.width), bool)
+        people, balls = [], []
+        if result.masks is not None:
+            for data, cls, conf in zip(result.masks.data, result.boxes.cls, result.boxes.conf):
+                mask = data.cpu().numpy() > 0.5
+                if int(cls) == 0:
+                    people.append(mask)
+                elif float(conf) >= BALL_MIN_CONF:
+                    balls.append(mask)
+        people.sort(key=lambda m: int(m.sum()), reverse=True)
+        empty = np.zeros((0, rgb.height, rgb.width), bool)
+        found[str(i)] = np.array(people, dtype=bool) if people else empty
+        found[f"{i}b"] = np.array(balls, dtype=bool) if balls else empty
     np.savez_compressed(cache, **found)
     return 0
 
@@ -211,20 +242,42 @@ def text_crop(size: tuple[int, int], boxes: list[tuple[float, float, float, floa
     return (0, top_i, w, bottom_i), "texto cortado: " + ", ".join(parts)
 
 
-def keep_main_people(alpha: Image.Image, masks: list[np.ndarray]) -> tuple[Image.Image, str]:
-    """Zera o alpha fora da(s) pessoa(s) principal(is) quando a foto tem mais de uma."""
+def keep_main_people(alpha: Image.Image, masks: list[np.ndarray],
+                     balls: list[np.ndarray]) -> tuple[Image.Image, str]:
+    """Tira as pessoas secundarias sem comer o que a principal segura.
+
+    Recortar na silhueta da pessoa apaga bola e trofeu junto, porque o YOLO segmenta o corpo e nao
+    o objeto na mao. Entao aqui se corta o contrario: tira os pixels de quem foi descartado e mantem
+    o que continuar grudado no sujeito. O microfone do figurante nao sobra flutuando porque a
+    subtracao vem antes da busca por regiao conectada, e o que sobra solto nao encosta em ninguem.
+    """
     import cv2
     areas = [int(m.sum()) for m in masks]
-    if areas[0] < PERSON_MIN_AREA * masks[0].size:
+    biggest = max(areas)
+    if biggest < PERSON_MIN_AREA * masks[0].size:
         return alpha, ""
-    kept = [m for m, a in zip(masks, areas) if a >= PERSON_KEEP_RATIO * areas[0]]
-    if len(kept) == len(masks):
+    kept = [m for m, a in zip(masks, areas) if a >= PERSON_KEEP_RATIO * biggest]
+    dropped = [m for m, a in zip(masks, areas) if a < PERSON_KEEP_RATIO * biggest]
+    if not dropped:
         return alpha, f"pessoas: {len(masks)}, todas mantidas"
-    union = np.logical_or.reduce(kept).astype(np.uint8)
-    k = max(3, int(PERSON_DILATE * max(union.shape)) | 1)
-    union = cv2.dilate(union, np.ones((k, k), np.uint8))
-    out = (np.asarray(alpha, dtype=np.float32) * union).astype(np.uint8)
-    return Image.fromarray(out), f"pessoas: {len(masks)} -> {len(kept)}"
+
+    arr = np.asarray(alpha)
+    seed = np.logical_or.reduce(kept + balls)
+    cut = np.logical_or.reduce(dropped).astype(np.uint8)
+    k = max(3, int(PERSON_DILATE * max(cut.shape)) | 1)
+    cut = cv2.dilate(cut, np.ones((k, k), np.uint8)).astype(bool) & ~seed
+
+    fg = (arr > 0) & ~cut
+    count, labels = cv2.connectedComponents(fg.astype(np.uint8), connectivity=8)
+    lut = np.zeros(count, bool)
+    lut[np.unique(labels[seed & fg])] = True
+    lut[0] = False  # rotulo 0 e o fundo
+    final = lut[labels]
+
+    note = f"pessoas: {len(masks)} -> {len(kept)}"
+    if int((final & ~seed).sum()) > OBJECT_NOTE_MIN * int(seed.sum()):
+        note += ", objeto junto"
+    return Image.fromarray(np.where(final, arr, 0).astype(np.uint8)), note
 
 
 def clean_alpha(img: Image.Image, threshold: int = 8) -> Image.Image:
@@ -323,8 +376,8 @@ def resolve_pack(arg: str) -> Path | None:
     return None
 
 
-def load_metadata(pack: Path, warn) -> dict:
-    """Junta defaults.json (ao lado do script) com pack.json (pasta do pacote) no que o site pede."""
+def load_metadata(pack: Path, warn) -> tuple[dict, dict]:
+    """Junta defaults.json (ao lado do script) com pack.json no que o site pede, mais o bloco "photos"."""
     defaults_path = SCRIPT_DIR / "defaults.json"
     defaults: dict = {}
     if defaults_path.is_file():
@@ -357,37 +410,113 @@ def load_metadata(pack: Path, warn) -> dict:
     color = meta.get("color")
     if not (isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color)):
         warn('pack.json sem "color" valida (#RRGGBB): e a cor da pagina do pacote no site')
-    return {
+    site = {
         "name": defaults.get("name_template", "{name}").format(name=name or "???"),
         "description": defaults.get("description", ""),
         "keywords": keywords,
         "color": color,
     }
+    photos = meta.get("photos") or {}
+    if not isinstance(photos, dict):
+        warn('pack.json com "photos" que nao e objeto; ignorado')
+        photos = {}
+    return site, photos
+
+
+def crop_to_pixels(frac, size: tuple[int, int], warn, name: str) -> tuple[int, int, int, int] | None:
+    """Retangulo [x1, y1, x2, y2] em fracao de 0 a 1 -> pixels. None (com aviso) se vier torto."""
+    try:
+        x1, y1, x2, y2 = (float(v) for v in frac)
+    except (TypeError, ValueError):
+        warn(f'{name}: "crop" precisa de 4 numeros [x1, y1, x2, y2] em fracao da imagem; ignorado')
+        return None
+    if not (0 <= x1 < x2 <= 1 and 0 <= y1 < y2 <= 1):
+        warn(f'{name}: "crop" fora de 0..1 ou com os cantos invertidos; ignorado')
+        return None
+    w, h = size
+    return round(x1 * w), round(y1 * h), round(x2 * w), round(y2 * h)
+
+
+def crop_list(regions, size: tuple[int, int], warn, name: str,
+              campo: str) -> list[tuple[int, int, int, int]]:
+    if not regions:
+        return []
+    if not isinstance(regions, list) or not all(isinstance(r, (list, tuple)) for r in regions):
+        warn(f'{name}: "{campo}" precisa ser uma lista de retangulos; ignorado')
+        return []
+    return [b for b in (crop_to_pixels(r, size, warn, f"{name} ({campo})") for r in regions) if b]
+
+
+def shift_box(box, crop):
+    """Leva um retangulo pro sistema de coordenadas de um recorte. None se ficou todo de fora."""
+    x1, y1 = max(box[0] - crop[0], 0), max(box[1] - crop[1], 0)
+    x2, y2 = min(box[2] - crop[0], crop[2] - crop[0]), min(box[3] - crop[1], crop[3] - crop[1])
+    return (x1, y1, x2, y2) if x2 > x1 and y2 > y1 else None
 
 
 # ---------------------------------------------------------------------------
 
 def process_photo(img: Image.Image, models: Models, people: list[np.ndarray],
-                  keep_text: bool, keep_all: bool) -> tuple[Image.Image, list[str]]:
+                  balls: list[np.ndarray], keeps: list, drops: list, keep_text: bool,
+                  keep_all: bool) -> tuple[Image.Image, list[str]]:
     """Foto comum (sem transparencia): corta legenda, tira o fundo, isola a(s) pessoa(s) principal(is)."""
     notes = []
     rgb = img.convert("RGB")
 
     if not keep_text:
-        crop, note = text_crop(rgb.size, models.captions(rgb), people[0] if people else None)
+        main = max(people, key=lambda m: int(m.sum())) if people else None
+        crop, note = text_crop(rgb.size, models.captions(rgb), main)
         if note:
             notes.append(note)
         if crop:
             img = img.crop(crop)
             people = [m[crop[1]:crop[3], crop[0]:crop[2]] for m in people]
+            balls = [m[crop[1]:crop[3], crop[0]:crop[2]] for m in balls]
+            keeps = [b for b in (shift_box(b, crop) for b in keeps) if b]
+            drops = [b for b in (shift_box(b, crop) for b in drops) if b]
 
+    source = img  # com fundo ainda: e dele que sai o recorte das regioes de "keep"
     img = models.remove_bg(img)
 
+    if balls:  # bola solta no ar o rembg as vezes le como fundo; a mascara do YOLO garante ela
+        alpha = np.asarray(img.getchannel("A")).copy()
+        alpha[np.logical_or.reduce(balls)] = 255
+        img.putalpha(Image.fromarray(alpha))
+        notes.append(f"bola: {len(balls)}")
+
+    forced = np.zeros((img.height, img.width), bool)
+    for region in keeps:  # rembg de novo, so no retangulo: ali o objeto e que e o saliente
+        patch = models.remove_bg(source.crop(region)).getchannel("A")
+        recorte = np.asarray(patch) > 0
+        if recorte.mean() > KEEP_FALLBACK:
+            # o rembg nao achou borda nenhuma ali dentro (objeto pequeno, borrado, da cor do fundo).
+            # "keep" e o usuario afirmando que tem algo ali, entao vale a caixa, so arredondada.
+            oval = Image.new("L", patch.size, 0)
+            ImageDraw.Draw(oval).ellipse((0, 0, patch.width - 1, patch.height - 1), fill=255)
+            recorte = np.asarray(oval) > 0
+            notes.append("keep sem borda, usei a caixa")
+        forced[region[1]:region[3], region[0]:region[2]] |= recorte
+    if keeps:
+        # a cor tem que voltar da foto original junto com o alpha: onde o rembg decidiu que era fundo
+        # ele zera o RGB, entao so mexer no alpha revelaria um borrao preto no lugar do objeto.
+        base = np.array(img)
+        base[forced, :3] = np.asarray(source.convert("RGB"))[forced]
+        base[forced, 3] = 255
+        img = Image.fromarray(base, "RGBA")
+        notes.append(f"keep do pack.json: {len(keeps)}")
+
     if not keep_all and len(people) >= 2:
-        alpha, note = keep_main_people(img.getchannel("A"), people)
+        alpha, note = keep_main_people(img.getchannel("A"), people, balls + ([forced] if keeps else []))
         if note:
             notes.append(note)
         img.putalpha(alpha)
+
+    if drops:
+        alpha = np.asarray(img.getchannel("A")).copy()
+        for x1, y1, x2, y2 in drops:
+            alpha[y1:y2, x1:x2] = 0
+        img.putalpha(Image.fromarray(alpha))
+        notes.append(f"drop do pack.json: {len(drops)}")
     return img, notes
 
 
@@ -443,13 +572,19 @@ def main() -> int:
     def warn(msg: str) -> None:  # vai pra secao AVISOS no fim do log e pro report.json
         problems.append(msg)
 
-    site = load_metadata(pack, warn)
+    site, photos = load_metadata(pack, warn)
+    unknown = sorted(set(photos) - {p.stem for p in sources})
+    if unknown:
+        warn(f'pack.json com "photos" pra arquivo que nao existe: {", ".join(unknown)}')
     logo = next((p for p in sources if args.tray and args.tray.lower() in p.stem.lower()), None)
     if logo is None:
         warn(f"nenhum arquivo com '{args.tray}' no nome: icone e capa do site vao precisar de escolha "
              f"manual (usei {sources[0].name} como icone)")
     models = Models(args.model)
-    people_by_index = {} if (args.keep_text and args.keep_all) else people_prepass(sources)
+    if args.keep_text and args.keep_all:
+        people_by_index, balls_by_index = {}, {}
+    else:
+        people_by_index, balls_by_index = people_prepass(sources)
     first_sticker = tray_source = None
     pairs = []
     stickers: list[dict] = []
@@ -461,15 +596,34 @@ def main() -> int:
     for i, src in enumerate(sources, start=1):
         try:
             original = ImageOps.exif_transpose(Image.open(src)).convert("RGBA")
+            people = people_by_index.get(i - 1, [])
+            balls = balls_by_index.get(i - 1, [])
+
+            entry = photos.get(src.stem)
+            entry = entry if isinstance(entry, dict) else {}
+            wanted = entry.get("crop")
+            keeps = crop_list(entry.get("keep"), original.size, warn, src.name, "keep")
+            drops = crop_list(entry.get("drop"), original.size, warn, src.name, "drop")
+            box = crop_to_pixels(wanted, original.size, warn, src.name) if wanted else None
+            pre = []
+            if box:
+                original = original.crop(box)
+                people = [m for m in (p[box[1]:box[3], box[0]:box[2]] for p in people) if m.any()]
+                balls = [m for m in (b[box[1]:box[3], box[0]:box[2]] for b in balls) if m.any()]
+                keeps = [b for b in (shift_box(b, box) for b in keeps) if b]
+                drops = [b for b in (shift_box(b, box) for b in drops) if b]
+                pre.append(f"crop do pack.json -> {original.width}x{original.height}")
+
             if max(original.size) < MIN_SOURCE_PX:
                 warn(f"{src.name}: {original.width}x{original.height}, vai ficar borrada em 512; "
                      "sugiro uma versao maior")
 
             if args.force_bg or transparent_ratio(original) < 0.02:
-                people = people_by_index.get(i - 1, [])
-                img, notes = process_photo(original, models, people, args.keep_text, args.keep_all)
+                img, notes = process_photo(original, models, people, balls, keeps, drops,
+                                           args.keep_text or box is not None, args.keep_all)
             else:
                 img, notes = original, ["ja transparente, so enquadrado"]
+            notes = pre + notes
 
             img = scale_to_fit(trim(clean_alpha(img)), inner)
             if args.outline:

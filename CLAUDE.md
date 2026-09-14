@@ -212,7 +212,12 @@ Regras que não mudam:
 - Keywords: widget `use-bootstrap-tag` em cima do `#keywords`, max 20, **tudo vira minúscula**
   (`#NFL` → `#nfl`). Vírgula fecha a tag. O modelo só é atualizado no `blur` do input visível do
   widget, e lê **antes** de o widget comitar o termo pendente: termo sem vírgula no fim se perde do
-  modelo mesmo aparecendo como tag. Remover tag pelo × também não atualiza o modelo.
+  modelo mesmo aparecendo como tag. Remover tag pelo × também não atualiza o modelo. ⚠️ **O
+  `#keywords` em si fica fora da tela** (`getBoundingClientRect` dá `x:-99990,y:-99990`; é só o alvo
+  de dados do widget). O input de verdade que recebe clique/digitação é um `<input>` **irmão** dele,
+  dentro de `.use-bootstrap-tag .input-wrapper` — clique por `ref` (`find`/`read_page`) ou por
+  coordenada nele erra o alvo (foco cai em `<body>`, digitar vira scroll de página). Ver "Passos"
+  item 3 pro fix. Achado em 2026-09-14 com o `packs/seattle-seahawks`.
 
 ### Passos (tools `mcp__claude-in-chrome__*`; refs vêm de `find`/`read_page` e mudam a cada carga)
 
@@ -222,12 +227,15 @@ Regras que não mudam:
 2. Texto por `form_input` (dispara `change`, o modelo pega): `#title` ← `site.name`; `#about` ←
    `site.description` (max 300); `#backgroundColor` ← `site.color` (default `#25d366`). Redes
    (`#facebookUrl`, `#instagramUrl`, `#twitterUrl`, `#tiktokUrl`): vazias.
-3. Keywords: `form_input` não serve. `left_click` no input visível do widget (o `find` acha por
-   "input dentro do widget de keywords"; **nunca** por coordenada sem screenshot fresco, e nunca
-   `type` com o foco fora de um input: espaço vira page-down), `type` com **vírgula depois de cada
-   termo, inclusive o último** (`#nfl, curti, paulo antunes,`), depois `key Tab`. Depois de
-   qualquer mexida (× em tag, termo a mais), clicar no input e `Tab` de novo. Conferir com
-   `javascript_tool`: `stickerPackUpdate.metadata.keywords`.
+3. Keywords: `form_input` não serve, e clique por `ref`/coordenada no que parece o input também não
+   (ver nota no "Como o site funciona" acima — o `#keywords` real fica fora da tela). **Focar por JS
+   antes de digitar**:
+   `document.getElementById('keywords').parentElement.querySelector('.input-wrapper input').focus()`,
+   e confirmar com `document.activeElement` (não pode ser `<body>`). Só então `type` com **vírgula
+   depois de cada termo, inclusive o último** (`#nfl, curti, paulo antunes,`), depois `key Tab`; nunca
+   `type` com o foco fora de um input, senão espaço vira page-down. Depois de qualquer mexida (× em
+   tag, termo a mais), refocar por JS e `Tab` de novo. Conferir com `javascript_tool`:
+   `stickerPackUpdate.metadata.keywords`.
 4. Ícone: `file_upload` no input `#trayIconInput` (ref pelo `find`: "file input do pack icon") com
    `icon`. Capa: `file_upload` em `#coverFile` com `cover`.
 5. Figurinhas: `file_upload` em `#multiStickersInput` com todos os `stickers[].file` **numa chamada
@@ -241,7 +249,9 @@ Regras que não mudam:
    `Stickers.md`.
 
 Mapeado em 2026-09-13 com o `packs/pack-1-teste`: título, descrição, 4 keywords, cor, ícone 512,
-capa e 8 figurinhas na ordem, todos os `POST` em 200, parado antes do Publish.
+capa e 8 figurinhas na ordem, todos os `POST` em 200, parado antes do Publish. Reconfirmado em
+2026-09-14 com o `packs/seattle-seahawks` (25 figurinhas, keywords já com o fix de focus via JS
+acima).
 
 ## Procedimento: registrar o link (fecha o pacote)
 

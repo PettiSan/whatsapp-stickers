@@ -148,6 +148,22 @@ mas só depois de 3 ou 4 pacotes mostrarem que vale.
 
 ## Procedimento: upload no getstickerpack.com
 
+**Onde roda (decidido em 2026-09-14):** sessão **nova**, modelo **Sonnet**, **sem subagente**, aberta
+na pasta do clone. Use o `/publica <pacote>`, que já carrega o procedimento inteiro.
+
+- **Sonnet, não Opus.** A receita abaixo está mapeada até o id do elemento, então isto é execução e
+  não raciocínio. O risco aqui é clicar no botão errado, e quem protege disso é a regra de nunca
+  publicar sem ordem, não o tamanho do modelo. Opus dirigindo browser é token caro à toa.
+- **Sem subagente.** O fluxo tem uma parada obrigatória no meio, onde o usuário olha o print e diz
+  "publica". Subagente não recebe isso em pleno voo, o relatório dele não chega direto ao usuário, e
+  ele estaria dirigindo o Chrome real, que é onde o usuário precisa poder interromper.
+- **Sessão nova** porque print e leitura de página enchem contexto rápido, e porque o modelo se
+  escolhe por sessão. Se a sessão atual não for Sonnet, dizer isso e pedir `/model claude-sonnet-5`
+  antes de começar.
+- **Pré-requisito de arquivo:** o upload lê o `out/` do pacote, que é gitignored. Se a sessão abriu
+  num clone que nunca rodou aquele pacote, o `out/` não existe: rodar `stickers.cmd <pacote>` uma vez
+  antes (uns 4 min), o que de quebra reconstrói o backup local.
+
 Ferramenta: **Claude in Chrome** (`mcp__claude-in-chrome__*`), no Chrome real do usuário, já logado
 no site. É a única que sobe arquivo num input de upload; o browser embutido do Desktop não serve.
 Se a extensão não estiver conectada (`list_connected_browsers` vazio), pedir pro usuário abrir o

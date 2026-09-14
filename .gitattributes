@@ -1,4 +1,4 @@
-# LF no repo e no checkout, nos dois sistemas (o repo vive no WSL, o Claude Desktop edita do Windows)
+# LF no repo e no checkout, independente do core.autocrlf do perfil do Windows
 * text=auto eol=lf
 
 # batch do Windows quer CRLF

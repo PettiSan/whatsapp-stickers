@@ -4,7 +4,7 @@ make_stickers.py: converte as imagens de uma pasta de pacote em figurinhas pront
 pra subir no getstickerpack.com (PNG 512x512, fundo transparente).
 
 Uso:
-    ./stickers.sh <pacote> [opcoes]                  (wrapper que usa o venv certo; stickers.cmd no Windows)
+    stickers.cmd <pacote> [opcoes]                   (wrapper que usa o venv certo)
     python make_stickers.py <pacote> [opcoes]
 
 <pacote> e o nome da pasta do pacote dentro de packs/ (dallas-cowboys -> packs/dallas-cowboys), que e

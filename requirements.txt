@@ -1,5 +1,6 @@
-# Instalar via setup.sh (Linux/WSL) ou setup.cmd (Windows): eles instalam o torch CPU antes,
-# senao o pip do Linux puxa o torch com CUDA (~3 GB) como dependencia do ultralytics.
+# Instalar via setup.cmd. O torch entra transitivo pelo ultralytics; no Windows o wheel default do
+# PyPI e o CPU. Se um dia vier build com CUDA (~3 GB), instalar o CPU antes, do indice
+# download.pytorch.org/whl/cpu.
 rembg[cpu]>=2.0.84
 pillow>=12
 ultralytics>=8.4

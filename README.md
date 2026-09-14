@@ -5,17 +5,16 @@ uma pasta de imagens brutas entra, figurinhas 512x512 com fundo transparente sae
 Batch upload do site. `Stickers.md` é o índice dos links publicados, versionado aqui e fonte única.
 `CLAUDE.md` é o procedimento que o Claude segue quando a sessão abre nesta pasta.
 
-Clone em `~/projects/whatsapp-stickers` no WSL (Ubuntu 24.04). Roda em Linux e em Windows.
+Clone em `C:\Projetos\whatsapp-stickers`, Windows nativo (o clone do WSL foi abolido em 2026-09-13).
 
 ## Setup (uma vez)
 
 ```
-./setup.sh        # Linux/WSL: cria .venv/ e instala (torch CPU, rembg, ultralytics, rapidocr)
-setup.cmd         # Windows: idem, com o py launcher
+setup.cmd         # cria .venv/ com o py launcher (Python 3.14) e instala rembg, ultralytics, rapidocr
 ```
 
 Uns minutos e ~2 GB de pacotes (o torch CPU sozinho é ~1 GB). Os modelos (~250 MB) baixam sozinhos
-no primeiro uso pra `~/.rembg/`. Tudo isso é local e gitignored: o repo em si tem ~400 KB.
+no primeiro uso pra `%USERPROFILE%\.rembg\`. Tudo isso é local e gitignored: o repo em si tem ~400 KB.
 
 ## Amanhã: criar um pacote novo, do zero
 
@@ -35,36 +34,35 @@ no primeiro uso pra `~/.rembg/`. Tudo isso é local e gitignored: o repo em si t
    O nome final vira `GarrettMVP - Dallas Cowboys 2026`, a descrição e o `#NFL` vêm de
    `defaults.json`. Se pular este passo, o Claude pergunta os três valores antes de rodar; se
    sobrar placeholder do template, o script avisa.
-3. **Abrir o Claude Code Desktop numa pasta do Windows** (ex.: `C:\Users\filip\OneDrive\Documentos\Stickers`,
-   fica nas pastas recentes), **não** na pasta do repo: pasta `\\wsl.localhost\...` o Desktop roda
-   dentro do WSL, e essa sessão não enxerga a extensão do Chrome que o passo 4 precisa (detalhe no
-   `CLAUDE.md`). Como o cwd não é o repo, a primeira mensagem aponta o procedimento:
-   `leia \\wsl.localhost\Ubuntu-24.04\home\pettisan\projects\whatsapp-stickers\CLAUDE.md e processa dallas-cowboys`.
-   Ele roda o script (dentro do WSL), manda o `preview.png` e lista os avisos (foto pra trocar, dado
-   faltando). Você aprova ou troca fotos e pede de novo.
+3. **Abrir o Claude Code Desktop na pasta do clone**, `C:\Projetos\whatsapp-stickers`, com a sessão
+   direto na pasta, **sem worktree**: num worktree (`.claude\worktrees\...`) a pasta nova do pacote
+   e o `.venv` não aparecem, e o Claude pede pra reabrir. O `CLAUDE.md` carrega sozinho. Primeira
+   mensagem: `processa dallas-cowboys`. Ele roda o script, manda o `preview.png` e lista os avisos
+   (foto pra trocar, dado faltando). Você aprova ou troca fotos e pede de novo.
 4. **Upload.** Na mesma sessão, com o preview aprovado, dizer `sobe o dallas-cowboys`. O Claude usa
    o Chrome real (extensão Claude in Chrome, painel aberto e logado na mesma conta do app), preenche
    o form com o `report.json`, sobe os PNGs pelo Batch upload e **para antes do Publish**, mostrando
-   o print. Você confere e diz `publica`. Enquanto a receita do form não estiver mapeada (ver
-   `CLAUDE.md`), este passo é manual: Batch upload com tudo que está em `out/stickers/`, ícone e
-   capa com o logo, dados do `out/report.json`.
+   o print. Você confere e diz `publica`. A receita do form está no `CLAUDE.md` (mapeada em
+   2026-09-13). O site **não salva rascunho**: tudo que está no form some se a aba for fechada ou
+   recarregada antes do Publish, então preenchimento e publicação são na mesma aba. Sem o Claude, o
+   mesmo form à mão: dados do `out/report.json`, ícone com o `NN-logo.png` (512) de `out/stickers/`,
+   capa com o `logo.*` bruto, Batch upload com tudo de `out/stickers/`.
 5. **Link e commit.** O site revisa antes de liberar a URL. Quando ela aparecer no dashboard, dizer
    `registra o link do dallas-cowboys`: o Claude coloca no `Stickers.md` e commita a pasta do pacote
    (imagens brutas + `pack.json`) junto com o índice. `Stickers.md` é a fonte única dos links (o doc
    do Google Drive foi abolido em 2026-09-13): o pacote só está pronto com esse commit pushado.
 
-Sem o Claude: os passos 1 e 2 iguais, depois `./stickers.sh dallas-cowboys` (WSL) ou
-`stickers.cmd dallas-cowboys` (Windows) e olhar `out/preview.png` e `out/log.txt`. O argumento é o
-nome da pasta em `packs/`; o script resolve o `packs/` sozinho.
+Sem o Claude: os passos 1 e 2 iguais, depois `stickers.cmd dallas-cowboys` e olhar `out/preview.png`
+e `out/log.txt`. O argumento é o nome da pasta em `packs/`; o script resolve o `packs/` sozinho.
 
 ## O que o script gera
 
-`./stickers.sh dallas-cowboys` escreve em `packs/dallas-cowboys/out/` (gitignored):
+`stickers.cmd dallas-cowboys` escreve em `packs/dallas-cowboys/out/` (gitignored):
 
 | Arquivo | O que é |
 |---|---|
 | `stickers/01-<nome>.png … NN-<nome>.png` | 512x512, fundo transparente: selecionar tudo aqui no **Batch upload** |
-| `tray.png` | 96x96, ícone do pacote na spec do WhatsApp |
+| `tray.png` | 96x96, ícone do pacote na spec do WhatsApp; **não sobe pro site**, que quer o 512 (`icon` do `report.json`) e gera o 96 sozinho |
 | `preview.png` | folha de contato original \| resultado, pra conferir antes de subir |
 | `log.txt` | o que foi feito em cada imagem (o mesmo que sai no terminal), com a seção `AVISOS` no fim |
 | `report.json` | tudo que o upload precisa: dados do site já montados, caminho de cada figurinha, capa, ícone, avisos |
@@ -117,12 +115,13 @@ investigada; isolar resolveu.
 
 ## Ambiente
 
-- `.venv/` na raiz do repo (gitignored), criado por `setup.sh`/`setup.cmd`. Versões usadas:
-  Python 3.12 (WSL) / 3.14 (Windows); rembg 2.0.84, onnxruntime 1.30 CPU, Pillow 12.3,
-  ultralytics 8.4 + torch 2.14 CPU, rapidocr 3.9.
-- No Linux o torch precisa vir do índice CPU (`download.pytorch.org/whl/cpu`), senão o pip puxa o
-  build com CUDA (~3 GB). O `setup.sh` faz isso antes do `requirements.txt`.
-- Modelos em `~/.rembg/` (baixados no primeiro uso: `models/` do rembg, birefnet-lite ~200 MB,
+- `.venv/` na raiz do repo (gitignored), criado por `setup.cmd` com o `py` launcher. Versões usadas:
+  Python 3.14; rembg 2.0.84, onnxruntime 1.30 CPU, Pillow 12.3, ultralytics 8.4 + torch 2.14 CPU,
+  rapidocr 3.9.
+- O torch entra transitivo pelo `ultralytics`, e no Windows o wheel default do PyPI é o CPU: por isso
+  o `setup.cmd` não instala torch à parte. Se um dia vier build com CUDA (~3 GB), instalar o CPU
+  antes, do índice `download.pytorch.org/whl/cpu`.
+- Modelos em `%USERPROFILE%\.rembg\` (baixados no primeiro uso: `models/` do rembg, birefnet-lite ~200 MB,
   isnet 170 MB e birefnet-general ~900 MB só se usar `--model`; `yolo11m-seg.pt` 43 MB). Os do
   RapidOCR vêm dentro do pacote pip.
 

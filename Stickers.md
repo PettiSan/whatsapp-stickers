@@ -42,7 +42,7 @@
 
 ## AFC West
 
-* ### Denver Broncos 
+* ### [Denver Broncos](https://getstickerpack.com/stickers/garrettmvp-denver-broncos-2026)
 
 * ### [Kansas City Chiefs](https://getstickerpack.com/stickers/garrettmvp-kansas-city-chiefs-2025)
 

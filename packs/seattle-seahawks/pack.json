@@ -1,0 +1,26 @@
+{
+  "name": "Seattle Seahawks",
+  "keywords": [
+    "seahawks",
+    "seattle",
+    "sam darnold",
+    "mike macdonald",
+    "jaxon smith-njigba",
+    "cooper kupp",
+    "byron murphy",
+    "jason myers"
+  ],
+  "color": "#002244",
+  "photos": {
+    "mike-1": { "crop": [0.20, 0.02, 0.73, 0.46] },
+    "mike-2": { "crop": [0.08, 0.0, 0.98, 0.66], "drop": [[0.0, 0.58, 0.33, 1.0]] },
+    "mike-3": { "crop": [0.42, 0.23, 0.74, 0.50] },
+    "mike-4": { "crop": [0.05, 0.06, 0.75, 0.52] },
+    "sam-1": { "crop": [0.39, 0.27, 0.57, 0.56] },
+    "sam-3": { "crop": [0.24, 0.0, 0.92, 0.72] },
+    "sam-6": { "crop": [0.26, 0.04, 0.86, 0.60] },
+    "sam-7": { "crop": [0.40, 0.05, 0.72, 0.57] },
+    "kupp-2": { "keep": [[0.30, 0.08, 0.45, 0.19]] },
+    "mayers-1": { "keep": [[0.79, 0.20, 0.96, 0.36]] }
+  }
+}

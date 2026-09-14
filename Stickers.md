@@ -94,5 +94,5 @@
 
 * ### San Francisco 49ers 
 
-* ### Seattle Seahawks
+* ### [Seattle Seahawks](https://getstickerpack.com/stickers/garrettmvp-seattle-seahawks-2026)
 

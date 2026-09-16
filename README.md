@@ -1,176 +1,349 @@
 # whatsapp-stickers
 
-Pipeline dos pacotes de figurinha do WhatsApp (grupo GarrettMVP), publicados no getstickerpack.com:
-uma pasta de imagens brutas entra, figurinhas 512x512 com fundo transparente saem, prontas pro
-Batch upload do site. `Stickers.md` é o índice dos links publicados, versionado aqui e fonte única.
-`CLAUDE.md` é o procedimento que o Claude segue quando a sessão abre nesta pasta.
+A folder of raw photos goes in. A published WhatsApp sticker pack comes out. A human approves the
+preview and says the word that publishes; everything in between is automated.
 
-Clone em `C:\Projetos\whatsapp-stickers`, Windows nativo (o clone do WSL foi abolido em 2026-09-13).
+Built for a WhatsApp group that trades NFL stickers. Three parts:
 
-## Setup (uma vez)
+1. **`make_stickers.py`, the image pipeline.** Drop 3 to 30 photos into a folder (`jpg`, `jpeg`,
+   `png`, `webp` or `avif`, any size), run one command, get 512x512 transparent-background stickers
+   plus a `report.json` with everything the publishing form asks for. No manual background removal,
+   no resizing, no renaming.
+2. **An agent procedure**, in `CLAUDE.md` and two slash commands, `/processa` and `/publica`. Claude
+   Code runs the script, reports what it changed in each photo, and then drives the user's real
+   Chrome to fill the publishing form, upload the stickers and verify the result. It stops before the
+   Publish button.
+3. **A human**, who approves the preview and, later, gives the order to publish.
 
-```
-setup.cmd         # cria .venv/ com o py launcher (Python 3.14) e instala rembg, ultralytics, rapidocr
-```
+The interesting part is not the stickers. It is what the pipeline decides on its own, what it refuses
+to decide, and where the line between the agent and the human sits.
 
-Uns minutos e ~2 GB de pacotes (o torch CPU sozinho é ~1 GB). Os modelos (~250 MB) baixam sozinhos
-no primeiro uso pra `%USERPROFILE%\.rembg\`. Tudo isso é local e gitignored: o repo em si tem ~400 KB.
+---
 
-## Amanhã: criar um pacote novo, do zero
+## Publishing: the agent fills the form, the human clicks Publish
 
-1. **Imagens.** Criar `packs/<nome-do-pacote>/` (ex.: `packs/dallas-cowboys/`; todo pacote mora
-   dentro de `packs/`, nunca na raiz do repo) e jogar as imagens brutas na raiz dela. Aceita `jpg`,
-   `jpeg`, `png`, `webp` e `avif`, em qualquer tamanho (abaixo de 300 px o script avisa que vai ficar
-   borrada). Não precisa tirar fundo, redimensionar nem renomear, nem converter o `avif` que o Google
-   Imagens serve hoje.
-   Uma delas tem que se chamar `logo.png` (ou `logo.jpg`...): é o ícone e a capa do pacote.
-   Entre 3 e 30 imagens.
-2. **Dados do site.** Copiar `pack.template.json` da raiz pra dentro da pasta como `pack.json` e
-   preencher os três campos:
+The packs live on getstickerpack.com. Its editor is a web form: title, description, up to 20
+keywords, a color, an icon, a cover image and a grid of 30 sticker slots with a batch upload. Once the
+script has run, filling that form is all the manual work that is left, and the site makes it worse:
+**nothing is saved until you publish.** Close the tab and the form is gone.
 
-   ```json
-   { "name": "Dallas Cowboys", "keywords": ["cowboys", "dak prescott", "jerry jones"], "color": "#041E42" }
-   ```
+`/publica <pack>` in Claude Code does the filling. It reads `out/report.json`, which the script
+already wrote with the pack name, description, keywords, color and the absolute path of every sticker
+in order, and then:
 
-   O nome final vira `GarrettMVP - Dallas Cowboys 2026`, a descrição e o `#NFL` vêm de
-   `defaults.json`. Se pular este passo, o Claude pergunta os três valores antes de rodar; se
-   sobrar placeholder do template, o script avisa.
-3. **Abrir o Claude Code Desktop na pasta do clone**, `C:\Projetos\whatsapp-stickers`, com a sessão
-   direto na pasta, **sem worktree**: num worktree (`.claude\worktrees\...`) a pasta nova do pacote
-   e o `.venv` não aparecem, e o Claude pede pra reabrir. O `CLAUDE.md` carrega sozinho. Primeira
-   mensagem: `processa dallas-cowboys`. Ele roda o script, manda o `preview.png` e lista os avisos
-   (foto pra trocar, dado faltando). Você aprova ou troca fotos e pede de novo.
-4. **Upload.** Na mesma sessão, com o preview aprovado, dizer `sobe o dallas-cowboys`. O Claude usa
-   o Chrome real (extensão Claude in Chrome, painel aberto e logado na mesma conta do app), preenche
-   o form com o `report.json`, sobe os PNGs pelo Batch upload e **para antes do Publish**, mostrando
-   o print. Você confere e diz `publica`. A receita do form está no `CLAUDE.md` (mapeada em
-   2026-09-13). O site **não salva rascunho**: tudo que está no form some se a aba for fechada ou
-   recarregada antes do Publish, então preenchimento e publicação são na mesma aba. Sem o Claude, o
-   mesmo form à mão: dados do `out/report.json`, ícone com o `NN-logo.png` (512) de `out/stickers/`,
-   capa com o `logo.*` bruto, Batch upload com tudo de `out/stickers/`.
-5. **Link e commit.** O site revisa antes de liberar a URL. Quando ela aparecer no dashboard, dizer
-   `registra o link do dallas-cowboys`: o Claude coloca no `Stickers.md` e commita a pasta do pacote
-   (imagens brutas + `pack.json`) junto com o índice. `Stickers.md` é a fonte única dos links (o doc
-   do Google Drive foi abolido em 2026-09-13): o pacote só está pronto com esse commit pushado.
+1. Opens the dashboard in the **user's own Chrome**, through the Claude in Chrome extension, already
+   logged in. It is the only tool available here that can put a file into a file input; the embedded
+   browser cannot. Login is the human's job: the agent never types a password.
+2. Reuses an empty draft if the account has one, otherwise creates a new pack.
+3. Fills title, description and color by element id. Keywords go through the site's tag widget, which
+   has rules of its own (below).
+4. Uploads the icon and the cover, then every sticker in a single batch call, in order.
+5. Verifies through the page's own JavaScript (`getCurrentStickersCount()`, the in-memory
+   `stickerPackUpdate.metadata`) and through the network log: every upload `POST` came back 200.
+6. Takes a screenshot of the grid and **stops, with the tab open.**
 
-Sem o Claude: os passos 1 e 2 iguais, depois `stickers.cmd dallas-cowboys` e olhar `out/preview.png`
-e `out/log.txt`. O argumento é o nome da pasta em `packs/`; o script resolve o `packs/` sozinho.
+The human looks at the screenshot and types "publica". Only then does the agent click *Publish
+stickerpack* and *Confirm & publish*. The site reviews the pack and releases a URL; that URL goes into
+`Stickers.md`, committed together with the pack's raw photos, and only then does the pack count as
+done.
 
-## O que o script gera
+Rules that do not change, written into the procedure:
 
-`stickers.cmd dallas-cowboys` escreve em `packs/dallas-cowboys/out/` (gitignored):
+- **Never click Publish or Confirm without an explicit order in the conversation.** Mapping, filling,
+  uploading and showing a screenshot: yes. Publishing: only on command.
+- **Never type a password anywhere**, even if offered.
+- **Everything happens in one tab, with no reload and no navigation**, because of how the site works.
 
-| Arquivo | O que é |
+### How the site was mapped
+
+Rather than clicking around, I read the editor's own script (`js/edit-sticker-pack.js`, 2026-09-13).
+What it showed:
+
+- **Nothing persists before Publish.** Text fields only update an object in memory. Icon, cover and
+  stickers are uploaded to S3 the moment each file input changes, but their association with the pack
+  also lives only in memory: `publish-stickerpack` sends the whole object at once. The account's
+  "draft" is just an id; reopen it and the form is empty. Hence one tab, no reload.
+- There is no Save button. Publish requires at least 3 stickers and opens a terms modal.
+- The grid has 30 slots. Batch upload distributes files, in order, into the first empty slots, and
+  warns when the pack is full.
+- The icon is stored as uploaded and displayed at 189 px; the site generates the 96x96 WhatsApp tray
+  by itself. So the 512 goes up, never the `tray.png`.
+- The keyword widget lowercases everything, commits a tag on comma, and updates its model on blur,
+  reading it **before** the pending term is committed. A term without a trailing comma shows up as a
+  tag and is silently missing from the model. Removing a tag with × does not update the model either.
+  And the element that carries the id sits off screen; the input that actually takes focus is a
+  sibling, so the agent focuses it through JavaScript and checks `document.activeElement` before
+  typing. Found on the second pack, 2026-09-14.
+
+Mapped on 2026-09-13 with an 8-sticker test pack. Reconfirmed on 2026-09-14 with a 25-sticker pack.
+
+### Which model, which session
+
+The upload runs in a **fresh session, on Sonnet, with no subagent.** Three deliberate choices:
+
+- **Sonnet.** The recipe is mapped down to element ids, so this step is execution, not reasoning.
+  What protects against clicking the wrong button is the rule above, not the size of the model. Opus
+  driving a browser is expensive for nothing.
+- **No subagent.** The flow has a mandatory stop in the middle, where the human looks at a screenshot
+  and says "publica". A subagent cannot receive that mid-flight, its report does not reach the user
+  directly, and it would be driving the real browser, which is exactly where the human needs to be
+  able to interrupt.
+- **Fresh session.** Screenshots and page reads fill a context window fast, and the model is chosen
+  per session.
+
+---
+
+## What happens to each photo
+
+A PNG that already has a transparent background (a logo pulled off the web) skips everything and is
+only reframed. Everything else goes through four steps.
+
+**0. Manual crop**, if `pack.json` asks for one on that file. A photo with a manual crop skips step 1,
+because the framing was already chosen by a human.
+
+**1. Caption and text overlay removal.** RapidOCR finds text, and text at the top or bottom of the
+frame is cropped off. The threshold is deliberate: it only counts as a caption if it has letters and
+**two or more words**, or a single word covering **30% or more of the width**. A jersey number, a logo
+acronym or a small watermark does not trigger a crop. A top crop never cuts into the person; a bottom
+crop takes at most 40% of their height. Text in the middle of the photo is left alone, and the log
+line says so, because that is a case where replacing the photo is cheaper than any heuristic.
+
+**2. Background removal**, with `rembg` and `birefnet-general-lite`.
+
+**3. Isolating the subject.** When there is more than one person, YOLO segments each of them and
+anyone under **50% of the largest person's area** is erased. Two people of similar size both stay,
+which is what you want for a celebration between teammates. If the largest person occupies less than
+**5%** of the photo, the subject is not a person and nothing is touched.
+
+**4.** Crop, then frame to 512x512 with a margin.
+
+---
+
+## Two decisions worth explaining
+
+### Whatever the subject is holding comes with them
+
+A ball, a trophy, a helmet, a microphone. This is not object detection. The cut **erases the pixels of
+whoever was discarded** and keeps whatever stays attached to the subject, instead of cutting along the
+subject's silhouette.
+
+The difference shows up when a bystander is touching the subject, a reporter standing next to the
+player: she is removed, the trophy in his hand stays. Before 2026-09-14 the cut followed the silhouette
+and ate every object in the subject's hands.
+
+### A loose ball in the air is a known gap, and it stays one
+
+A ball that nobody is holding is attached to nothing, so keeping it would need detection. The `sports
+ball` class from COCO is right there in the same YOLO model. It does not work here, and I have the
+numbers:
+
+| Case | Confidence |
 |---|---|
-| `stickers/01-<nome>.png … NN-<nome>.png` | 512x512, fundo transparente: selecionar tudo aqui no **Batch upload** |
-| `tray.png` | 96x96, ícone do pacote na spec do WhatsApp; **não sobe pro site**, que quer o 512 (`icon` do `report.json`) e gera o 96 sozinho |
-| `preview.png` | folha de contato original \| resultado, pra conferir antes de subir |
-| `log.txt` | o que foi feito em cada imagem (o mesmo que sai no terminal), com a seção `AVISOS` no fim |
-| `report.json` | tudo que o upload precisa: dados do site já montados, caminho de cada figurinha, capa, ícone, avisos |
-| `webp/` | só com `--webp`: WebP ≤ 100 KB, formato nativo do WhatsApp |
+| Ball in a player's hands | 0.73 and 0.96 |
+| **Ball loose in the air** | **0.113** |
+| Noise: a Pepsi logo on a background panel | 0.107 |
+| Noise: a player's shoulder, in a photo where his real ball went undetected | 0.113 |
 
-Código de saída: `0` sem avisos, `3` gerou tudo mas há avisos (foto pra trocar, `pack.json`
-incompleto, `logo.*` faltando, imagem ilegível), `2` não rodou.
+Measured on one pack, 2026-09-14. COCO was trained on round balls and reads an oval one badly, so
+signal and noise overlap. Any threshold low enough to catch the airborne ball also catches the
+advertising board behind it. The threshold stays at 0.5 and **the loose ball is genuinely lost.**
 
-Imagem que saiu ruim: trocar a foto de origem (é mais barato que qualquer flag), ou rodar de novo
-com `--model birefnet-general` (mais pesado).
+That is the only known gap. Closing it would mean training a detector, which is only worth it if it
+turns out to matter across many packs. Until then it is written down rather than papered over, and
+there is a manual escape hatch below.
 
-## O que acontece com cada foto
+---
 
-PNG que já vem com fundo transparente (logo baixado do Google) pula tudo isso e só é enquadrado.
+## Where each rule lives
 
-0. **Recorte manual**, se o `pack.json` pedir aquele arquivo no bloco `photos` (ver abaixo). Foto com
-   recorte manual pula o passo 1, porque o enquadramento já foi escolhido a mão.
-1. **Legenda/overlay de texto** no topo ou na base é cortada fora da foto (RapidOCR acha o texto).
-   Só conta como legenda texto com letras e ≥ 2 palavras, ou uma palavra ocupando ≥ 30% da largura:
-   número de camisa, sigla de logo e marca d'água pequena não disparam corte. Corte em cima nunca
-   passa pela pessoa; corte embaixo tira no máximo 40% da altura dela. Texto no meio da foto não é
-   cortado (a linha de log avisa: aí é trocar a foto).
-2. **Fundo removido** (rembg, `birefnet-general-lite`).
-3. **Mais de uma pessoa na foto:** o YOLO segmenta cada uma; fica quem tem ≥ 50% da área da maior,
-   o resto é apagado. Duas pessoas de tamanho parecido ficam as duas (celebração entre jogadores).
-   Se a maior pessoa tem < 5% da foto, o sujeito não é gente e nada é mexido.
+Three kinds of rule, three places. Putting one in the wrong place is what makes rules rot.
 
-   **O que o sujeito segura vai junto** (bola, troféu, capacete, microfone). Isso não é detecção de
-   objeto: o corte apaga os pixels de **quem foi descartado** e mantém o que continuar grudado no
-   sujeito, em vez de recortar na silhueta dele. A diferença importa quando o figurante encosta no
-   sujeito, tipo repórter ao lado do jogador: ela sai, o troféu na mão dele fica. Antes de
-   2026-09-14 o corte era na silhueta, e comia todo objeto na mão.
+| Kind | Lives in | Example |
+|---|---|---|
+| Generic perception | the models, off the shelf | people and balls (YOLO), text (RapidOCR), foreground (BiRefNet) |
+| Policy that applies to every photo | `make_stickers.py` | keep what the subject is holding, drop bystanders, crop captions |
+| Taste, per photo | `pack.json`, under `photos` | "just Macdonald's face in `mike-3`" |
+| The saved prompt | `.claude/commands/` | the boilerplate behind `/processa` and `/publica` |
 
-   **Bola solta no ar** (passe, chute, bola ainda não agarrada) não está grudada em ninguém, então
-   dependeria de detecção: classe `sports ball` do COCO, que o mesmo YOLO já traz. Só que o COCO foi
-   treinado em bola redonda e lê mal a oval. Medido no pacote do Seattle em 2026-09-14: bola na mão
-   sai com 0.73 e 0.96, mas bola no ar sai com 0.113, empatada com o ruído (o logo da Pepsi num
-   painel de fundo deu 0.107). Como sinal e ruído se cruzam, o limiar fica em 0.5 e **a bola solta no
-   ar se perde mesmo**. É a única lacuna conhecida, e a saída seria treinar um detector, que só vale
-   se isso aparecer em muitos pacotes.
-4. Recorte, enquadramento em 512x512 com margem.
+Two consequences.
 
-A linha de log de cada imagem diz o que foi feito (`texto cortado: base 25%`, `pessoas: 10 -> 1`,
-`objeto junto`, `bola: 1`, `crop do pack.json`).
+**No model gets trained for objects in hand.** A held ball or trophy needs no detector: it is attached
+to the subject, and the connectivity rule already covers it. Training would be expensive on the wrong
+axis. The bottleneck is not GPU (there is an RTX 5060 Ti in this machine); it is labeling, because the
+pipeline consumes segmentation masks, not boxes, so it would mean drawing polygons by hand on hundreds
+of photos. The one measured exception, the loose ball, is above. If it starts showing up in many
+packs, training becomes the honest answer. With one or two photos per pack, it is not.
 
-## Ajuste manual de uma foto
+**No per-photo request lives in prose.** Not in the chat, not in a `.md`. Prose needs a human to
+reread it and reapply it on every run, and that is exactly what gets lost. It goes into `pack.json`,
+where the same command gives the same result six months from now.
 
-O que é gosto, e não percepção, vai no `pack.json`, no bloco `photos`. A chave é o nome do arquivo sem
-extensão, e todo retângulo é `[x1, y1, x2, y2]` em **fração de 0 a 1 da imagem original**:
+---
+
+## Adjusting one photo by hand
+
+Anything that is **taste rather than perception** goes into `pack.json`, under `photos`. The key is the
+filename without its extension, and every rectangle is `[x1, y1, x2, y2]` as a **fraction of the
+original image**:
 
 ```json
 "photos": {
-  "mike-3":   { "crop": [0.42, 0.23, 0.74, 0.50] },
-  "kupp-2":   { "keep": [[0.30, 0.08, 0.45, 0.19]] },
-  "mike-2":   { "drop": [[0.0, 0.58, 0.33, 1.0]] }
+  "mike-3": { "crop": [0.42, 0.23, 0.74, 0.50] },
+  "kupp-2": { "keep": [[0.30, 0.08, 0.45, 0.19]] },
+  "mike-2": { "drop": [[0.0, 0.58, 0.33, 1.0]] }
 }
 ```
 
-| Chave | O que faz | Quando usar |
+| Key | What it does | When |
 |---|---|---|
-| `crop` | corta a foto nesse retângulo antes de tudo, e pula a busca por legenda | "quero só o rosto", "corta da cintura pra baixo" |
-| `keep` | roda o rembg **de novo só dentro do retângulo** e força o que sair de lá pro resultado | o pipeline perdeu algo: bola solta no ar, objeto que o rembg leu como fundo |
-| `drop` | apaga o retângulo no fim | sobrou sujeira: pedaço de gente que o YOLO não detectou, então não havia máscara pra subtrair |
+| `crop` | crops to that rectangle before anything else, and skips the caption search | "just the face", "cut from the waist down" |
+| `keep` | re-runs background removal **inside that rectangle only** and forces whatever comes out into the result | the pipeline lost something: a ball in the air, an object the model read as background |
+| `drop` | erases the rectangle at the end | leftover mess: a piece of a person YOLO never detected, so there was no mask to subtract |
 
-`keep` funciona porque, num retângulo apertado em volta do objeto, ele é que é o saliente, então o
-mesmo modelo que errou na foto inteira acerta ali dentro. É a saída para o caso da bola solta no ar,
-que a detecção não cobre.
+**Why `keep` works:** inside a tight rectangle around the object, that object is the salient one. The
+same model that got it wrong on the full photo gets it right in there. That is the escape hatch for the
+loose ball that detection cannot cover. If the model finds no edge at all inside the rectangle and
+hands back more than 65% of it, the box itself is used, rounded to an ellipse: `keep` is the human
+asserting that something is there.
 
-Ficando no `pack.json` e não num pedido escrito no chat, o mesmo comando dá o mesmo resultado daqui a
-seis meses. Recorte fechado num rosto sobe pouco pixel pra 512 e sai mais mole, o que é esperado.
+To find a rectangle, crop a test file and **look** before writing the numbers down. A coordinate grid
+over the enlarged photo makes the fraction readable directly. Guessing coordinates is not an option.
 
-## Opções do script
+---
 
-| Opção | Efeito |
+## Measured
+
+Eight test images, CPU, 2026-09-13:
+
+| Model | Per image |
 |---|---|
-| `--outline 8` | contorno branco de 8 px (default 0: decidido em 2026-09-13, sem contorno) |
-| `--margin 16` | margem transparente em volta (default 16) |
-| `--model X` | `birefnet-general-lite` (default), `isnet-general-use` (5x mais rápido, pior com gente no fundo), `birefnet-general` (2x mais lento que o lite, ganho marginal) |
-| `--keep-text` | não corta legenda/overlay |
-| `--keep-all` | não descarta pessoas secundárias |
-| `--force-bg` | trata PNG transparente como foto comum (passa por todos os passos) |
-| `--tray josh` | escolhe qual imagem vira o ícone (trecho do nome; default `logo`, senão a primeira) |
-| `--webp` | também gera `out/webp/` |
-| `--out pasta` | saída em outro lugar (default `packs/<pacote>/out`) |
+| `isnet-general-use` | ~1.3 s |
+| `birefnet-general-lite` (default) | ~7 s |
+| `birefnet-general` | ~13 s |
 
-Medido em 2026-09-13 nas 8 imagens de teste (CPU, Windows): `isnet-general-use` ~1,3 s/imagem,
-`birefnet-general-lite` ~7 s/imagem, `birefnet-general` ~13 s/imagem. YOLO e OCR somam ~0,5 s por
-imagem. Pacote de 30 no default: uns 4 min, sem precisar ficar olhando.
+YOLO and OCR add roughly 0.5 s per image. A 30-image pack on defaults takes about four minutes,
+unattended.
 
-O YOLO roda num processo separado de propósito: depois de uma inferência do torch no mesmo
-processo, o rembg (onnxruntime) cai de ~6 s pra ~12 s por imagem e não volta. Medido, causa não
-investigada; isolar resolveu.
+**YOLO runs in a separate process on purpose.** After a torch inference in the same process, `rembg`
+(onnxruntime) drops from ~6 s to ~12 s per image and never recovers. Measured, cause not investigated,
+isolating it fixed it. I would rather write that down than pretend I know why.
 
-## Ambiente
+---
 
-- `.venv/` na raiz do repo (gitignored), criado por `setup.cmd` com o `py` launcher. Versões usadas:
-  Python 3.14; rembg 2.0.84, onnxruntime 1.30 CPU, Pillow 12.3, ultralytics 8.4 + torch 2.14 CPU,
-  rapidocr 3.9.
-- O torch entra transitivo pelo `ultralytics`, e no Windows o wheel default do PyPI é o CPU: por isso
-  o `setup.cmd` não instala torch à parte. Se um dia vier build com CUDA (~3 GB), instalar o CPU
-  antes, do índice `download.pytorch.org/whl/cpu`.
-- Modelos em `%USERPROFILE%\.rembg\` (baixados no primeiro uso: `models/` do rembg, birefnet-lite ~200 MB,
-  isnet 170 MB e birefnet-general ~900 MB só se usar `--model`; `yolo11m-seg.pt` 43 MB). Os do
-  RapidOCR vêm dentro do pacote pip.
+## Published
 
-## Spec do WhatsApp
+Two packs have gone through the whole flow, script to browser to public URL:
 
-Fonte: `github.com/WhatsApp/stickers`, `Android/README.md`. 512x512 px, WebP, estática ≤ 100 KB,
-animada ≤ 500 KB, tray 96x96 PNG ≤ 50 KB, 3 a 30 figurinhas por pacote, contorno branco de 8 px
-recomendado. O getstickerpack.com aceita PNG e faz a conversão pra WebP do lado dele.
+| Pack | Source photos in `packs/` | Published |
+|---|---|---|
+| [Seattle Seahawks](https://getstickerpack.com/stickers/garrettmvp-seattle-seahawks-2026) | 25 | 2026-09-14 |
+| [Denver Broncos](https://getstickerpack.com/stickers/garrettmvp-denver-broncos-2026) | 29 | 2026-09-14 |
+
+The first commit in this repository is from 2026-09-13. The Seahawks pack was published the next day.
+
+`Stickers.md` is the full index, by NFL division. The other 18 packs in it are from 2025 and predate
+the pipeline.
+
+---
+
+## Using it
+
+### Setup, once
+
+```
+setup.cmd
+```
+
+Creates `.venv/` with the `py` launcher (Python 3.14) and installs `rembg`, `ultralytics` and
+`rapidocr`. A few minutes and about 2 GB of packages; torch CPU alone is ~1 GB. Models (~250 MB)
+download on first use into `%USERPROFILE%\.rembg\`. All of that is local and gitignored. What the
+repository carries is the code and the raw photos of each pack, a few MB per pack.
+
+The wrappers are Windows `.cmd` files; the script itself is plain Python.
+
+### Making a pack
+
+1. Create `packs/<pack-name>/` and drop the raw photos in. `jpg`, `jpeg`, `png`, `webp` and `avif`,
+   any size; below 300 px the script warns it will look blurry. One of them must be named `logo.*`:
+   it becomes the pack icon and cover. Between 3 and 30 images.
+2. Copy `pack.template.json` in as `pack.json` and fill three fields:
+   ```json
+   { "name": "Dallas Cowboys", "keywords": ["cowboys", "dak prescott"], "color": "#041E42" }
+   ```
+   The name template, the description and the fixed hashtag come from `defaults.json`. If a template
+   placeholder is left in, the script says so.
+3. Open Claude Code in the clone folder (not in a worktree: the `.venv/` and any uncommitted pack
+   folder are not there) and run `/processa dallas-cowboys`. The agent runs the script, sends back
+   `preview.png` and lists the warnings: a photo to swap, a missing field. Approve, or swap photos
+   and run it again.
+4. In a fresh session, `/publica dallas-cowboys`. The form gets filled and the agent stops before
+   Publish, screenshot on screen. Say "publica".
+5. When the URL shows up in the dashboard, register it: the agent puts it in `Stickers.md` and
+   commits the pack folder, raw photos and `pack.json`, together with the index.
+
+Without the agent: steps 1 and 2 are the same, then `stickers.cmd dallas-cowboys`, look at
+`out/preview.png` and `out/log.txt`, and fill the site's form by hand from `out/report.json`.
+
+The script logs in Portuguese. Each line says what was done to that photo: `texto cortado: base 25%`
+(caption cropped, bottom 25%), `pessoas: 10 -> 1` (people found and kept), `objeto junto` (a held
+object survived the cut), `bola: 1` (a ball forced back in), `crop do pack.json`.
+
+### What it writes
+
+Into `packs/<pack>/out/`, gitignored:
+
+| File | What it is |
+|---|---|
+| `stickers/01-<name>.png … NN-<name>.png` | 512x512, transparent background: what goes into the batch upload |
+| `tray.png` | 96x96 icon, WhatsApp spec; not uploaded, the site wants the 512 and makes its own 96 |
+| `preview.png` | contact sheet, original next to result, to check before uploading |
+| `log.txt` | per-image decisions, with an `AVISOS` (warnings) section at the end |
+| `report.json` | everything the upload needs, already assembled: site fields, cover, icon, every sticker path in order, warnings |
+| `webp/` | only with `--webp`: WebP under 100 KB, WhatsApp's native format |
+
+Exit codes: `0` clean, `3` produced everything but there are warnings, `2` did not run. Exit 3 is not
+a failure; it is the list of things a human has to decide.
+
+A bad result is usually cheaper to fix by swapping the source photo than by any flag.
+
+### Options
+
+| Flag | Effect |
+|---|---|
+| `--outline 8` | white 8 px outline (default 0) |
+| `--margin 16` | transparent margin around the sticker |
+| `--model X` | `birefnet-general-lite` (default), `isnet-general-use` (5x faster, worse with people in the background), `birefnet-general` (2x slower than lite, marginal gain) |
+| `--keep-text` | do not crop captions |
+| `--keep-all` | do not discard secondary people |
+| `--force-bg` | treat a transparent PNG as a normal photo |
+| `--tray josh` | pick which image becomes the icon (substring of the filename; default `logo`) |
+| `--webp` | also emit `out/webp/` |
+| `--out dir` | write somewhere else |
+
+### Environment
+
+Python 3.14; rembg 2.0.84, onnxruntime 1.30 CPU, Pillow 12.3, ultralytics 8.4 with torch 2.14 CPU,
+rapidocr 3.9. Torch comes in transitively through `ultralytics`, and on Windows the default PyPI wheel
+is the CPU build, which is why `setup.cmd` does not install it separately. If a CUDA build (~3 GB) ever
+shows up by default, install the CPU one first from `download.pytorch.org/whl/cpu`.
+
+---
+
+## WhatsApp sticker spec
+
+From `github.com/WhatsApp/stickers`, `Android/README.md`: 512x512, WebP, static under 100 KB, animated
+under 500 KB, 96x96 PNG tray icon under 50 KB, 3 to 30 stickers per pack, an 8 px white outline
+recommended. The publishing site accepts PNG and converts to WebP itself.
+
+---
+
+## The rest
+
+`CLAUDE.md` is the agent procedure: how to run and report a pack, the mapped upload form, the rules
+that never bend. `.claude/commands/` holds the two slash commands. `Stickers.md` is the index of
+published packs, versioned here as the single source of truth. The procedure, the commands and the
+script's log are in Portuguese, the language the group runs in; this README is the English entry
+point.
+
+MIT licensed. The photos under `packs/` belong to their respective owners and are there as pipeline
+input, not as redistributable assets.

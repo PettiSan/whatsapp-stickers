@@ -241,8 +241,8 @@ Two packs have gone through the whole flow, script to browser to public URL:
 
 The first commit in this repository is from 2026-09-13. The Seahawks pack was published the next day.
 
-`Stickers.md` is the full index, by NFL division. The other 18 packs in it are from 2025 and predate
-the pipeline.
+`Stickers.md` is the full index, by NFL division. The other 18 packs in it are from 2025 and were made
+by hand, one photo at a time, before this repository existed. They are the reason it exists.
 
 ---
 

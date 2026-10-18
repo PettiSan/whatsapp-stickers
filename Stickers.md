@@ -68,7 +68,7 @@
 
 * ### Chicago Bears 
 
-* ### Detroit Lions 
+* ### [Detroit Lions](https://getstickerpack.com/stickers/garrettmvp-detroit-lions-2026)
 
 * ### Green Bay Packers 
 

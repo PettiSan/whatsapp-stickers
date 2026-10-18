@@ -24,7 +24,8 @@ whatsapp-stickers/
     <pacote>/                   uma pasta por pacote, ex.: packs/dallas-cowboys/
       *.jpg|*.jpeg|*.png         imagens brutas, qualquer tamanho, na raiz da pasta
       *.webp|*.avif              (avif desde 2026-09-14: é o formato que o Google Imagens serve hoje)
-      logo.*                    convenção: o logo do pacote (ícone + capa no site + figurinha)
+      logo.*                    convenção: o logo do pacote (ícone + capa no site + figurinha);
+                                png ou jpg, nunca webp/avif (a capa do site recusa, ver "Como o site funciona")
       pack.json                 { "name", "keywords", "color", "photos" }: o que muda por pacote
       out/                      gerado (gitignored): stickers/, tray.png, preview.png, log.txt, report.json
 ```
@@ -86,6 +87,7 @@ coisas não estão lá: o `.venv/` (gitignored) e qualquer pasta de pacote ainda
    antes de rodar, com `git mv` se já estiver versionada.
 
 2. Conferir que existe `logo.*` na pasta. Se não, avisar antes de rodar (o site pede ícone e capa).
+   Se for `logo.webp`/`.avif`, converter pra `logo.png` e apagar o original (a capa só aceita png/jpg).
 3. Rodar o comando. Não passar flag nenhuma por conta própria: os defaults são as decisões do
    usuário (sem contorno, cortar legenda, descartar figurante, `birefnet-general-lite`).
 4. Ler `out/log.txt` e `out/report.json`. Mandar `out/preview.png` pro usuário com `SendUserFile`
@@ -208,7 +210,13 @@ Regras que não mudam:
   o `tray.png`.
 - Capa (`#coverFile`): vai o `cover` (o logo) e ponto. O site converte pra 1024x450 com corte
   central e o logo sai cortado; decisão do usuário em 2026-09-13, não sinalizar nem sugerir outra
-  imagem.
+  imagem. ⚠️ **A capa só aceita jpeg, jpg ou png** (medido em 2026-10-18 com o
+  `packs/jacksonville-jaguars`): `logo.webp` dá `422` em `.../cover-image` ("must be a file of type:
+  jpeg, jpg, png") e o `coverImage` fica vazio sem erro visível na página. O `logo.*` do pacote
+  tem que ser **png ou jpg**: se a imagem bruta for webp/avif, converter pra `logo.png` (mesmos
+  pixels, ex.: `PIL.Image.open(...).save("logo.png")`) e commitar o `logo.png`, não o webp. Se a
+  pasta já veio com `logo.webp`, converter antes de rodar o pipeline e apagar o webp. Em último
+  caso, subir um PNG convertido do scratchpad, sem tocar na pasta do pacote.
 - Keywords: widget `use-bootstrap-tag` em cima do `#keywords`, max 20, **tudo vira minúscula**
   (`#NFL` → `#nfl`). Vírgula fecha a tag. O modelo só é atualizado no `blur` do input visível do
   widget, e lê **antes** de o widget comitar o termo pendente: termo sem vírgula no fim se perde do

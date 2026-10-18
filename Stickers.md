@@ -34,7 +34,7 @@
 
 * ### Indianapolis Colts 
 
-* ### Jacksonville Jaguars 
+* ### [Jacksonville Jaguars](https://getstickerpack.com/stickers/garrettmvp-jacksonville-jaguars-2026) 
 
 * ### Tennessee Titans
 

@@ -1,0 +1,24 @@
+{
+  "name": "Jacksonville Jaguars",
+  "keywords": [
+    "jaguars",
+    "jacksonville",
+    "duval",
+    "trevor lawrence",
+    "travis hunter",
+    "brian thomas jr",
+    "josh hines-allen",
+    "liam coen",
+    "cam little",
+    "jakobi meyers",
+    "foyesade oluokun",
+    "parker washington"
+  ],
+  "color": "#006778",
+  "photos": {
+    "hines-1": { "keep": [[0.58, 0.15, 0.87, 0.55]] },
+    "trevor-3": { "crop": [0.30, 0.0, 0.76, 0.78] },
+    "trevor-9": { "crop": [0.28, 0.08, 0.66, 0.80] },
+    "trevor-11": { "drop": [[0.83, 0.30, 1.0, 0.62]] }
+  }
+}

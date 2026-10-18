@@ -95,6 +95,10 @@ coisas não estão lá: o `.venv/` (gitignored) e qualquer pasta de pacote ainda
 5. Reportar **neste formato**, nada além:
    - `AVISOS` do log, um por linha, cada um com a ação sugerida (trocar a foto X, completar
      `pack.json`, adicionar `logo.*`...). Se `sem avisos`, dizer só isso.
+     **Exceção: resolução não é critério** (decisão do usuário em 2026-10-18). O aviso
+     `NxM, vai ficar borrada em 512` não pede ação: não sugerir versão maior, não pedir decisão,
+     não desaconselhar `crop` apertado por perder pixel. Vale pras figurinhas e pros assets do
+     pacote (logo, capa). Citar a linha só como informação, se citar.
    - Linhas do log com `texto cortado`, `pessoas: N -> M`, `objeto junto`, `bola:` e
      `crop do pack.json`, pra ele saber o que foi mexido.
 6. Parar e esperar. O usuário olha o preview e aprova, troca fotos ou pede rodar de novo. Só depois
@@ -142,6 +146,10 @@ relendo e reaplicando a cada rodada, e é exatamente isso que se perde. Vai pro 
 - `drop`: apaga o retângulo no fim. Serve pra sujeira de gente que o YOLO **não** detectou, caso em
   que não existe máscara pra subtrair (aconteceu no `mike-2`, jaqueta de um terceiro sem cabeça no
   enquadramento).
+- `keep_all: true`: não descarta pessoa nenhuma só naquela foto (o `--keep-all` vale pro pacote
+  inteiro). É pra quando o adversário faz parte da cena, ex.: `penei-2` dos Lions, o jogador dos
+  Bears pendurado no Sewell. Medido em 2026-10-18: um `keep` em volta da pessoa descartada **não**
+  serve, o rembg não acha borda num retângulo desse tamanho e devolve a caixa com o fundo.
 
 Pra achar o retângulo, recortar num arquivo de teste no scratchpad e **olhar** antes de gravar, nunca
 chutar coordenada. Grade de coordenadas sobre a foto ampliada ajuda a ler a fração direto. Se um dia recorte de rosto virar rotina em todo pacote, dá pra automatizar sem treino

@@ -33,7 +33,8 @@ O que acontece com cada foto (PNG que ja e transparente pula tudo isso e so e en
      quem tem menos da metade da area da maior e descartado). O que a pessoa principal segura vai
      junto: o corte tira os pixels de quem foi descartado, nao tudo que estiver fora da silhueta,
      entao bola, trofeu e capacete na mao sobrevivem. Bola solta no ar entra pela classe
-     "sports ball" do COCO, que o mesmo YOLO ja detecta.
+     "sports ball" do COCO, que o mesmo YOLO ja detecta. Com "keep_all": true na entrada da foto
+     no "photos" do pack.json, ninguem e descartado so naquela foto (o --keep-all vale pro pacote).
   4. recorte, enquadramento em 512x512 com margem
 
 Regras que o script garante (spec oficial: github.com/WhatsApp/stickers, Android/README.md):
@@ -620,7 +621,8 @@ def main() -> int:
 
             if args.force_bg or transparent_ratio(original) < 0.02:
                 img, notes = process_photo(original, models, people, balls, keeps, drops,
-                                           args.keep_text or box is not None, args.keep_all)
+                                           args.keep_text or box is not None,
+                                           args.keep_all or entry.get("keep_all") is True)
             else:
                 img, notes = original, ["ja transparente, so enquadrado"]
             notes = pre + notes

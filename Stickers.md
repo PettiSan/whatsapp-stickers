@@ -70,7 +70,7 @@
 
 * ### [Detroit Lions](https://getstickerpack.com/stickers/garrettmvp-detroit-lions-2026)
 
-* ### Green Bay Packers 
+* ### [Green Bay Packers](https://getstickerpack.com/stickers/garrettmvp-green-bay-packers-2026)
 
 * ### [Minnesota Vikings](https://getstickerpack.com/stickers/garrettmvp-minnesota-vikings-2025)
 

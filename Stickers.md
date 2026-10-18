@@ -80,7 +80,7 @@
 
 * ### [Atlanta Falcons](https://getstickerpack.com/stickers/garrettmvp-atlanta-falcons-2025) 
 
-* ### Carolina Panthers 
+* ### [Carolina Panthers](https://getstickerpack.com/stickers/garrettmvp-carolina-panthers-2026) 
 
 * ### New Orleans Saints 
 

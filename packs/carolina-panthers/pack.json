@@ -1,0 +1,28 @@
+{
+  "name": "Carolina Panthers",
+  "keywords": [
+    "panthers",
+    "carolina",
+    "keep pounding",
+    "bryce young",
+    "tetairoa mcmillan",
+    "chuba hubbard",
+    "derrick brown",
+    "jaycee horn",
+    "jalen coker",
+    "ryan fitzgerald",
+    "devin lloyd",
+    "cam newton",
+    "luke kuechly"
+  ],
+  "color": "#0085CA",
+  "photos": {
+    "bryce-5": { "crop": [0.33, 0.02, 0.74, 0.62] },
+    "cam-1": { "crop": [0.30, 0.08, 0.68, 0.66] },
+    "cam-2": { "crop": [0.27, 0.03, 0.69, 0.50] },
+    "chuba-3": { "crop": [0.12, 0.0, 0.86, 1.0] },
+    "jalen-3": { "keep": [[0.20, 0.0, 0.36, 0.27]], "drop": [[0.72, 0.30, 1.0, 1.0]] },
+    "luke-1": { "crop": [0.03, 0.15, 0.88, 0.73] },
+    "derrick-2": { "crop": [0.24, 0.11, 0.75, 0.58] }
+  }
+}

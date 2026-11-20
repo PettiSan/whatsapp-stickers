@@ -22,7 +22,7 @@
 
   * #### [Lamar Jackson](https://getstickerpack.com/stickers/garrettmvp-lamar-jackson-2025)
 
-* ### Cincinnati Bengals 
+* ### [Cincinnati Bengals](https://getstickerpack.com/stickers/garrettmvp-cincinnati-bengals-2026)
 
 * ### Cleveland Browns 
 

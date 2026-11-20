@@ -146,6 +146,13 @@ relendo e reaplicando a cada rodada, e é exatamente isso que se perde. Vai pro 
 - `drop`: apaga o retângulo no fim. Serve pra sujeira de gente que o YOLO **não** detectou, caso em
   que não existe máscara pra subtrair (aconteceu no `mike-2`, jaqueta de um terceiro sem cabeça no
   enquadramento).
+- `paste`: mantém a região **como está na foto**, sem rembg. É pra cenário que o usuário quer junto e
+  onde não existe objeto saliente pro `keep` achar. Medido em 2026-11-20 com o `jamar-6` dos Bengals
+  (chão preto da end zone): o `keep` ali devolveu só riscos brancos.
+- `drop` e `paste` aceitam **polígono** no lugar do retângulo, `[[x, y], [x, y], ...]` (3+ pontos,
+  mesma fração). Usar quando a borda é diagonal ou segue o corpo: retângulo ali vira escada (o
+  `jamar-7` dos Bengals precisou de 34 retângulos e ainda sobrou serrilhado). Exemplo: o adversário
+  colado na borda da camisa no `jamar-1` dos Bengals.
 - `keep_all: true`: não descarta pessoa nenhuma só naquela foto (o `--keep-all` vale pro pacote
   inteiro). É pra quando o adversário faz parte da cena, ex.: `penei-2` dos Lions, o jogador dos
   Bears pendurado no Sewell. Medido em 2026-10-18: um `keep` em volta da pessoa descartada **não**

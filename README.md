@@ -199,6 +199,11 @@ original image**:
 | `crop` | crops to that rectangle before anything else, and skips the caption search | "just the face", "cut from the waist down" |
 | `keep` | re-runs background removal **inside that rectangle only** and forces whatever comes out into the result | the pipeline lost something: a ball in the air, an object the model read as background |
 | `drop` | erases the rectangle at the end | leftover mess: a piece of a person YOLO never detected, so there was no mask to subtract |
+| `paste` | keeps the region **exactly as it is in the photo**, no background removal | scenery the user wants in the sticker, where there is no salient object for `keep` to find: the black end-zone turf under the feet in the Bengals `jamar-6` |
+
+`drop` and `paste` also take a **polygon** instead of a rectangle: `[[x, y], [x, y], ...]`, 3+ points in
+the same 0-1 fractions. Use it when the edge is diagonal or follows a body: a rectangle there turns
+into a staircase. Example: the opponent glued to the jersey edge in the Bengals `jamar-1`.
 
 **Why `keep` works:** inside a tight rectangle around the object, that object is the salient one. The
 same model that got it wrong on the full photo gets it right in there. That is the escape hatch for the

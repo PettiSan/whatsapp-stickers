@@ -448,6 +448,41 @@ def crop_list(regions, size: tuple[int, int], warn, name: str,
     return [b for b in (crop_to_pixels(r, size, warn, f"{name} ({campo})") for r in regions) if b]
 
 
+def region_masks(regions, size: tuple[int, int], warn, name: str, campo: str) -> list[np.ndarray]:
+    """Regioes de "drop"/"paste" -> uma mascara por regiao, no tamanho da foto.
+
+    Cada regiao e um retangulo [x1, y1, x2, y2] ou um poligono [[x, y], [x, y], ...] (3+ pontos),
+    sempre em fracao de 0 a 1. Poligono existe porque borda diagonal em retangulo vira escada: o
+    chao da end zone no jamar-6 e o adversario colado na camisa no jamar-1, ambos dos Bengals.
+    Mascara, e nao caixa, porque assim ela e cortada junto com a foto do mesmo jeito que as pessoas.
+    """
+    if not regions:
+        return []
+    if not isinstance(regions, list) or not all(isinstance(r, (list, tuple)) for r in regions):
+        warn(f'{name}: "{campo}" precisa ser uma lista de retangulos ou poligonos; ignorado')
+        return []
+    w, h = size
+    masks = []
+    for r in regions:
+        canvas = Image.new("L", size, 0)
+        if r and all(isinstance(p, (list, tuple)) for p in r):
+            try:
+                pts = [(float(x), float(y)) for x, y in r]
+            except (TypeError, ValueError):
+                pts = []
+            if len(pts) < 3 or not all(0 <= x <= 1 and 0 <= y <= 1 for x, y in pts):
+                warn(f'{name}: poligono de "{campo}" precisa de 3+ pontos [x, y] dentro de 0..1; ignorado')
+                continue
+            ImageDraw.Draw(canvas).polygon([(x * w, y * h) for x, y in pts], fill=255)
+        else:
+            box = crop_to_pixels(r, size, warn, f"{name} ({campo})")
+            if not box:
+                continue
+            ImageDraw.Draw(canvas).rectangle((box[0], box[1], box[2] - 1, box[3] - 1), fill=255)
+        masks.append(np.asarray(canvas) > 0)
+    return masks
+
+
 def shift_box(box, crop):
     """Leva um retangulo pro sistema de coordenadas de um recorte. None se ficou todo de fora."""
     x1, y1 = max(box[0] - crop[0], 0), max(box[1] - crop[1], 0)
@@ -458,8 +493,8 @@ def shift_box(box, crop):
 # ---------------------------------------------------------------------------
 
 def process_photo(img: Image.Image, models: Models, people: list[np.ndarray],
-                  balls: list[np.ndarray], keeps: list, drops: list, keep_text: bool,
-                  keep_all: bool) -> tuple[Image.Image, list[str]]:
+                  balls: list[np.ndarray], keeps: list, drops: list[np.ndarray], keep_text: bool,
+                  keep_all: bool, pastes: list[np.ndarray] = ()) -> tuple[Image.Image, list[str]]:
     """Foto comum (sem transparencia): corta legenda, tira o fundo, isola a(s) pessoa(s) principal(is)."""
     notes = []
     rgb = img.convert("RGB")
@@ -474,7 +509,8 @@ def process_photo(img: Image.Image, models: Models, people: list[np.ndarray],
             people = [m[crop[1]:crop[3], crop[0]:crop[2]] for m in people]
             balls = [m[crop[1]:crop[3], crop[0]:crop[2]] for m in balls]
             keeps = [b for b in (shift_box(b, crop) for b in keeps) if b]
-            drops = [b for b in (shift_box(b, crop) for b in drops) if b]
+            drops = [m[crop[1]:crop[3], crop[0]:crop[2]] for m in drops]
+            pastes = [m[crop[1]:crop[3], crop[0]:crop[2]] for m in pastes]
 
     source = img  # com fundo ainda: e dele que sai o recorte das regioes de "keep"
     img = models.remove_bg(img)
@@ -497,25 +533,32 @@ def process_photo(img: Image.Image, models: Models, people: list[np.ndarray],
             recorte = np.asarray(oval) > 0
             notes.append("keep sem borda, usei a caixa")
         forced[region[1]:region[3], region[0]:region[2]] |= recorte
-    if keeps:
+    for region in pastes:
+        # "paste" e a regiao da foto como esta, sem rembg: pra cenario que o usuario quer junto
+        # (o chao preto da end zone no jamar-6 dos Bengals), onde nao ha objeto saliente pra achar.
+        forced |= region
+    if keeps or pastes:
         # a cor tem que voltar da foto original junto com o alpha: onde o rembg decidiu que era fundo
         # ele zera o RGB, entao so mexer no alpha revelaria um borrao preto no lugar do objeto.
         base = np.array(img)
         base[forced, :3] = np.asarray(source.convert("RGB"))[forced]
         base[forced, 3] = 255
         img = Image.fromarray(base, "RGBA")
-        notes.append(f"keep do pack.json: {len(keeps)}")
+        if keeps:
+            notes.append(f"keep do pack.json: {len(keeps)}")
+        if pastes:
+            notes.append(f"paste do pack.json: {len(pastes)}")
 
     if not keep_all and len(people) >= 2:
-        alpha, note = keep_main_people(img.getchannel("A"), people, balls + ([forced] if keeps else []))
+        alpha, note = keep_main_people(img.getchannel("A"), people,
+                                       balls + ([forced] if keeps or pastes else []))
         if note:
             notes.append(note)
         img.putalpha(alpha)
 
     if drops:
         alpha = np.asarray(img.getchannel("A")).copy()
-        for x1, y1, x2, y2 in drops:
-            alpha[y1:y2, x1:x2] = 0
+        alpha[np.logical_or.reduce(drops)] = 0
         img.putalpha(Image.fromarray(alpha))
         notes.append(f"drop do pack.json: {len(drops)}")
     return img, notes
@@ -604,7 +647,8 @@ def main() -> int:
             entry = entry if isinstance(entry, dict) else {}
             wanted = entry.get("crop")
             keeps = crop_list(entry.get("keep"), original.size, warn, src.name, "keep")
-            drops = crop_list(entry.get("drop"), original.size, warn, src.name, "drop")
+            drops = region_masks(entry.get("drop"), original.size, warn, src.name, "drop")
+            pastes = region_masks(entry.get("paste"), original.size, warn, src.name, "paste")
             box = crop_to_pixels(wanted, original.size, warn, src.name) if wanted else None
             pre = []
             if box:
@@ -612,7 +656,8 @@ def main() -> int:
                 people = [m for m in (p[box[1]:box[3], box[0]:box[2]] for p in people) if m.any()]
                 balls = [m for m in (b[box[1]:box[3], box[0]:box[2]] for b in balls) if m.any()]
                 keeps = [b for b in (shift_box(b, box) for b in keeps) if b]
-                drops = [b for b in (shift_box(b, box) for b in drops) if b]
+                drops = [m for m in (d[box[1]:box[3], box[0]:box[2]] for d in drops) if m.any()]
+                pastes = [m for m in (p[box[1]:box[3], box[0]:box[2]] for p in pastes) if m.any()]
                 pre.append(f"crop do pack.json -> {original.width}x{original.height}")
 
             if max(original.size) < MIN_SOURCE_PX:
@@ -622,7 +667,7 @@ def main() -> int:
             if args.force_bg or transparent_ratio(original) < 0.02:
                 img, notes = process_photo(original, models, people, balls, keeps, drops,
                                            args.keep_text or box is not None,
-                                           args.keep_all or entry.get("keep_all") is True)
+                                           args.keep_all or entry.get("keep_all") is True, pastes)
             else:
                 img, notes = original, ["ja transparente, so enquadrado"]
             notes = pre + notes

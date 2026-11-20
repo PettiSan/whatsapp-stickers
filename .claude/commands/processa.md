@@ -53,6 +53,9 @@ meses. Todo retangulo e `[x1, y1, x2, y2]` em fracao de 0 a 1 da imagem original
   figurinha do Dak). "Corta da cintura pra baixo" tambem e `crop`.
 - "faltou a bola", "sumiu o objeto" -> `keep` em volta do que sumiu.
 - "sobrou sujeira", "tem uma sombra perdida" -> `drop` em cima da sujeira.
+- "deixa o chao", "quero o pedaco do campo junto" -> `paste`: a regiao fica como esta na foto.
+- `drop` e `paste` aceitam poligono `[[x, y], ...]` no lugar do retangulo, pra borda diagonal ou
+  colada no corpo (retangulo ali vira escada).
 
 Para achar o retangulo, recortar num arquivo de teste no scratchpad e **olhar** antes de gravar, em vez
 de chutar coordenada. Desenhar uma grade de coordenadas sobre a foto ampliada ajuda a ler a fracao.

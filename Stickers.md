@@ -66,7 +66,7 @@
 
 ## NFC North
 
-* ### Chicago Bears 
+* ### [Chicago Bears](https://getstickerpack.com/stickers/garrettmvp-chicago-bears-2026)
 
 * ### [Detroit Lions](https://getstickerpack.com/stickers/garrettmvp-detroit-lions-2026)
 

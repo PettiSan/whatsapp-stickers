@@ -1,0 +1,38 @@
+{
+  "name": "San Francisco 49ers",
+  "keywords": [
+    "49ers",
+    "san francisco",
+    "niners",
+    "brock purdy",
+    "christian mccaffrey",
+    "george kittle",
+    "kyle shanahan",
+    "nick bosa",
+    "fred warner",
+    "trent williams",
+    "deforest buckner",
+    "mike evans",
+    "deebo samuel"
+  ],
+  "color": "#AA0000",
+  "photos": {
+    "cmc-1": { "crop": [0.06, 0.0, 0.95, 0.57] },
+    "cmc-5": { "keep_all": true },
+    "deforest-1": { "crop": [0.09, 0.0, 0.95, 0.70] },
+    "evans-1": { "crop": [0.18, 0.0, 0.84, 0.35] },
+    "evans-2": { "keep_all": true, "drop": [[0.08, 0.53, 0.32, 0.655]] },
+    "fred-1": { "crop": [0.12, 0.07, 0.92, 0.46] },
+    "fred-2": { "crop": [0.02, 0.07, 1.0, 0.84] },
+    "kittle-1": { "crop": [0.36, 0.0, 0.64, 0.64] },
+    "kittle-4": { "crop": [0.04, 0.12, 0.95, 0.85] },
+    "kyle-1": { "crop": [0.38, 0.03, 0.66, 0.68] },
+    "kyle-2": { "crop": [0.33, 0.03, 0.69, 0.50] },
+    "nick-1": { "crop": [0.18, 0.06, 0.86, 0.91] },
+    "nick-2": { "crop": [0.22, 0.04, 0.82, 0.87] },
+    "purdy-4": { "crop": [0.24, 0.07, 0.80, 0.93] },
+    "purdy-5": { "crop": [0.07, 0.02, 0.83, 0.67] },
+    "purdy-6": { "crop": [0.23, 0.06, 0.80, 0.53] },
+    "purdy-7": { "crop": [0.41, 0.17, 0.77, 0.90] }
+  }
+}

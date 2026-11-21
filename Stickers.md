@@ -4,6 +4,8 @@
 
 * [Capitão Caracol, Pete Carrol](https://getstickerpack.com/stickers/garrettmvp-capitao-caracol-2025)
 
+* ### [BR Casting](https://getstickerpack.com/stickers/garrettmvp-br-casting-2026)
+
 ## AFC East
 
 * ### [Buffalo Bills](https://getstickerpack.com/stickers/garrettmvp-buffalo-bills-2025)

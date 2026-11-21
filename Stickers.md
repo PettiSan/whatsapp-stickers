@@ -92,7 +92,7 @@
 
 * ### Los Angeles Rams 
 
-* ### San Francisco 49ers 
+* ### [San Francisco 49ers](https://getstickerpack.com/stickers/garrettmvp-san-francisco-49ers-2026)
 
 * ### [Seattle Seahawks](https://getstickerpack.com/stickers/garrettmvp-seattle-seahawks-2026)
 
